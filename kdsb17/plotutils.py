@@ -1,25 +1,26 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
+
 def show_slices(array, filename=None, every=5, cols=10):
     
-    N = int(np.ceil(len(array)/every))
-    rows = int(np.ceil(N/cols))
+    n = int(np.ceil(len(array)/every))
+    rows = int(np.ceil(n/cols))
     
-    fig, ax = plt.subplots(rows, cols, figsize=[24,12])
+    fig, ax = plt.subplots(rows, cols, figsize=[24, 12])
     for i, idx in enumerate(range(0, len(array), every)):
-        r = i//cols
-        c = i%cols
+        r = i // cols
+        c = i % cols
         
         if rows == 1:
             axes = ax[c]
-        elif cols ==1:
+        elif cols == 1:
             axes = ax[r]
         else:
-            axes = ax[r,c]
+            axes = ax[r, c]
         
         axes.set_title('slice %d' % idx)
-        axes.imshow(array[idx],cmap='gray')
+        axes.imshow(array[idx], cmap='gray')
         axes.axis('off')
     
     if filename:
