@@ -1,12 +1,3 @@
-"""
-##### Data generator
-
-* random rotation (48 possibilities)
-* zero-mean
-* scaling
-* add random offset value to all pixels
-"""
-
 import os
 
 from glob import glob
@@ -14,7 +5,7 @@ import dicom
 import numpy as np
 from skimage import filters, measure
 from scipy.ndimage.interpolation import zoom
-from scipy.ndimage import binary_erosion, binary_dilation
+from scipy.ndimage import binary_opening, binary_dilation
 
 
 # Read sequence of dicom files of a patient
@@ -69,12 +60,18 @@ def check_sequence(dcm_seq, tol=1e-2):
         
         # These are Type 1 elements
         assert dcm.Modality == 'CT', 'Expected Modality=CT, got %s.' % dcm.Modality
+
         assert dcm.BitsAllocated == 16, 'Expected BitsAllocated=16, got %d.' % dcm.BitsAllocated
+
         assert dcm.PhotometricInterpretation == 'MONOCHROME2',\
             'Expected PhotometricInterpretation=MONOCHROME2, got %s.' % dcm.PhotometricInterpretation
+
         assert dcm.Rows == 512, 'Expected Rows=512, got %d.' % dcm.Rows
+
         assert dcm.Columns == 512, 'Expected Columns=512, got %d.' % dcm.Columns
+
         assert dcm.SamplesPerPixel == 1, 'Expected SamplesPerPixel=1, got %d.' % dcm.SamplesPerPixel
+
         assert dcm.ImageOrientationPatient == [1, 0, 0, 0, 1, 0],\
             'Expected ImageOrientationPatient=[1,0,0,0,1,0], got %s.' % dcm.ImageOrientationPatient
         
@@ -153,47 +150,47 @@ def dcm2array(dcm):
     Returns:
         Image array in HU units.
     """
-    
-    # These are Type 1 so they shouldn't raise an error
-    slope = dcm.RescaleSlope
-    intercept = dcm.RescaleIntercept
-    pixel_representation = dcm.PixelRepresentation
-    
-    # This is Type 2, so it might not be present in the dicom file
-    try:
-        pixel_padding_value = dcm.PixelPaddingValue
-    except:
-        pixel_padding_value = None
-    
+
     # Apparently pydicom is already taking into consideration
     # the PixelRepresentation and BitsAllocated when making the pixel_array.
     # However is not considering BitsStored nor HighBit.
     array = dcm.pixel_array
-    
-    if isinstance(pixel_padding_value, bytes):
-        pixel_padding_value = int.from_bytes(
-            pixel_padding_value, byteorder='little', signed=(pixel_representation == 1))
+
+    # These are Type 1 so they shouldn't raise an error
+    slope = dcm.RescaleSlope
+    intercept = dcm.RescaleIntercept
+    representation = dcm.PixelRepresentation
+
+    # This is Type 3, so it might not be present in the dicom file
+    try:
+        padding = dcm.PixelPaddingValue
+    except:
+        padding = None
+
+    # Determination of proper pixel padding value
+    if isinstance(padding, int) and padding > 32767 and representation == 1:
+        padding = padding.to_bytes(2, byteorder='little', signed=False)
+
+    if isinstance(padding, bytes):
+        padding = int.from_bytes(padding, byteorder='little', signed=(representation == 1))
     
     # Set padded area to air (HU=-1000)
-    if pixel_padding_value:
-        array[array == pixel_padding_value] = -1000 - intercept
-    
+    if padding:
+        array[array == padding] = -1000 - intercept
+
+    # Safety measure
+    # There a few cases in which the pixel padding value is valid
+    # but does not correspond with the actual padded values in the data (typically -2000).
+    # Furthermore, CT is represented at with 12 bits, hence it cannot exceed 4095.
+    array[array <= -2000] = -1000 - intercept
+    array[array > 4095] = 4095
+
     # Transform to Hounsfield Units.
     array = np.float64(array)
     array *= slope
     array += intercept
     array = np.int16(array)
-    
-    # DEPRECATED:
-    # * Misunderstanding of pixel sample storaging.
-    # * PixelRepresentation just refers to the raw pixel sample sign.
-    # * Furthermore, nowadays overlay data is stored separately.
-    #
-    # Check range of array values; CT scans are at most 12 bits.
-    # top = 4095 if pixel_representation == 0 else 2047
-    # bottom = 0 if pixel_representation == 0 else -2048
-    # assert bottom <= array.max() <= top, '(dcm2array) array values outside [%d,%d] interval' % (bottom,top)
-    
+
     return array
 
 
@@ -224,90 +221,127 @@ def make_3d_array(dcm_seq):
     dy = np.float32([dcm.PixelSpacing[0] for dcm in dcm_seq]).mean()
     dx = np.float32([dcm.PixelSpacing[1] for dcm in dcm_seq]).mean()
     
-    spacing = [dz, dy, dx]
+    spacing = (dz, dy, dx)
     
     return array3d, spacing
 
 
 # Resample
-def resample(array, spacing, new_spacing=[1, 1, 1]):
+def resample(array, spacing, new_spacing=(1, 1, 1)):
     """Resamples an array to specified pixel spacing (resolution).
     Args:
         array (numpy.array): input array.
-        spacing (list): Original pixel spacing in z-y-x order.
-        new_spacing (list): New pixel spacing in z-y-x order.
+        spacing (tuple): Original pixel spacing in z-y-x order.
+        new_spacing (tuple): New pixel spacing in z-y-x order.
     
     Returns:
         Array with new pixel spacing (and thus a new shape).
     """
     
-    N = np.float32(array.shape)
+    n = np.float32(array.shape)
     dz = np.float32(spacing)
     dz_ = np.float32(new_spacing)
     
-    zoom_factor = (1 - 1/N)*(dz/dz_) + 1/N
+    zoom_factor = (1 - 1/n)*(dz/dz_) + 1/n
     
     return zoom(array, zoom_factor, mode='nearest')
 
 
+def make_lungs_mask(array, kernel_size=3):
+    """ Makes lungs mask from 3D array.
+    
+        Args:
+            array (numpy.array): 3D array of stacked slices.
+            kernel_size (int): Size of kernel used in morphological operations (in spacing units).      
+        Returns:
+            A tuple containing:
+                - Sub-array with lung mask.
+                - Binarization threshold.
+    """
+
+    if array.ndim is not 3:
+        raise ValueError('Array must be 3D.')
+
+    kernel2d = np.ones((kernel_size, kernel_size), dtype='uint8')
+    kernel3d_zx = np.ones((kernel_size, 1, kernel_size), dtype='uint8')
+    kernel3d_y = np.ones((1, kernel_size, 1), dtype='uint8')
+
+    # Find optimal threshold between Air-Lungs (=1) and the rest (water, muscle, fat, bone) (=0)
+    thres = filters.threshold_otsu(array.flatten())
+
+    # Binarize
+    mask = np.uint8(array < thres)
+
+    def isolate_lungs(mask_slice):
+        # Remove noisy pixels
+        mask_slice = binary_opening(mask_slice, structure=kernel2d, iterations=2)
+
+        # Pad with ones so the outer air regions get the same label
+        mask_slice = np.pad(mask_slice, pad_width=1, mode='constant', constant_values=1)
+        labels_slice = measure.label(mask_slice)
+
+        # Kill background, preserve lungs
+        background_label = labels_slice[0, 0]
+        mask_slice[labels_slice == background_label] = 0
+
+        # Undo padding
+        mask_slice = mask_slice[1:-1, 1:-1]
+
+        return mask_slice
+
+    mask_lungs = np.stack([isolate_lungs(x) for x in mask])
+
+    # Dilation along z and x to connect lungs while avoiding the scanner bed
+    mask_lungs = binary_dilation(mask_lungs, structure=kernel3d_zx, iterations=4)
+
+    # Keep the biggest volumes
+    # Get lungs label (should be the most frequent label besides the background)
+    labeled = measure.label(mask_lungs)
+    labels, counts = np.unique(labeled, return_counts=True)
+
+    counts = counts[labels > 0]
+    labels = labels[labels > 0]
+    lungs_label = labels[counts.argmax()]
+
+    mask_lungs = np.uint8(labeled == lungs_label)
+
+    # Finally dilate along the remaining y dimension
+    mask_lungs = binary_dilation(mask_lungs, structure=kernel3d_y, iterations=4)
+
+    return mask_lungs, thres
+
+
 # Extract lung array
-def extract_lungs(array, kernel_size=3, slice_drop_prob=None):
+def extract_lungs(array, mask, slice_drop_prob=None):
     """ Extracts sub-array containing the lungs.
     
     Args:
         array (numpy.array): 3D array of stacked slices.
-        kernel_size (int): Size of erosion/dilation kernel for segmentation (in spacing units).
-        slice_drop_prob (float): Amount of cumulative volume percentage to drop from volume tails.
+        mask (numpy.array): 3D binary array indicating the lung (1) and background voxels (0).
+        slice_drop_prob (None or tuple): Cumulative volume percentage along z-dimension to drop from volume tails.
     Returns:
-        A tuple containing:
-            - Sub-array with lungs.
-            - Binarization threshold.
-            - Bounding box coordinates.
+        Sub-array with lungs.
     """
-    
-    if array.ndim is not 3:
-        raise ValueError('Array must be 3D.')
-    
-    # Find optimal threshold between Air-Lungs (=1) and the rest (water, muscle, fat, bone) (=0)
-    thres = filters.threshold_otsu(array.flatten())
-    mask = array < thres
-    
-    # Pad with ones so the outer air regions get the same label
-    mask = np.pad(mask, pad_width=((0, 0), (1, 1), (1, 1)), mode='constant', constant_values=1)
-    mask_labeled = measure.label(mask)
-    
-    # Kill background, preserve lungs
-    background_label = mask_labeled[0, 0, 0]
-    mask[mask_labeled == background_label] = 0
-    
-    # Undo padding
-    mask = mask[1:-1, 1:-1, 1:-1]
-    
-    # Erode noisy voxels and dilate to fill lungs and add some margin around
-    kernel = np.ones([kernel_size]*3, dtype='bool')
-    
-    mask_lungs = binary_erosion(mask, structure=kernel, iterations=1)
-    mask_lungs = binary_dilation(mask_lungs, structure=kernel, iterations=2)
     
     # Drop slices from the tails that contain low volume of lungs
     if slice_drop_prob:
-        slice_volume = mask_lungs.sum(axis=(1, 2))
-        total_volume = mask_lungs.sum()
+        slice_volume = mask.sum(axis=(1, 2))
+        total_volume = mask.sum()
         
-        idx1 = np.cumsum(slice_volume/total_volume) < slice_drop_prob/2
-        idx2 = np.cumsum(slice_volume/total_volume) > (1 - slice_drop_prob/2)
+        idx1 = np.cumsum(slice_volume/total_volume) < slice_drop_prob[0]
+        idx2 = np.cumsum(slice_volume/total_volume) > (1 - slice_drop_prob[1])
         
         kill = np.logical_or(idx1, idx2)
-        mask_lungs[kill] = 0
+        mask[kill] = 0
     
     # Get bounding box of lung component
-    box = bounding_box(mask_lungs)
+    box = bounding_box(mask)
     
     (z1, z2), (y1, y2), (x1, x2) = box
     
     array_lungs = array[z1:z2, y1:y2, x1:x2]
     
-    return array_lungs, thres, box
+    return array_lungs, box
 
 
 # Get up-right bounding box of array
@@ -335,4 +369,4 @@ def bounding_box(array):
         dim_min, dim_max = np.where(nonzero)[0][[0, -1]]
         coords.append((dim_min, dim_max))
     
-    return coords
+    return tuple(coords)

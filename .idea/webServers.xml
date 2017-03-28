@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="ba0113fc-2758-4b6d-a0b0-c4d754ce74cd" name="oregon" url="http://35.163.75.12">
+        <fileTransfer host="35.163.75.12" port="22" privateKey="$USER_HOME$/.ssh/kdsb17.pem" rootFolder="/data/code" accessType="SFTP" keyPair="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" />
+          </advancedOptions>
+          <option name="port" value="22" />
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
