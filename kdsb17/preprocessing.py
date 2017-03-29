@@ -1,5 +1,5 @@
 import os
-
+import warnings
 from glob import glob
 import dicom
 import numpy as np
@@ -52,45 +52,36 @@ def check_sequence(dcm_seq, tol=1e-2):
         the most slices (the list is modified in-place).
     
     """
+
+    exception_template = "An exception of type {0} occurred. Arguments:\n{1!r}"
     
     # Check basic requirements
-    rescale_type_raised = False
-    series_description_raised = False
     for dcm in dcm_seq:
         
         # These are Type 1 elements
-        assert dcm.Modality == 'CT', 'Expected Modality=CT, got %s.' % dcm.Modality
+        if dcm.Modality != 'CT':
+            warnings.warn('Expected Modality=CT, got %s.' % dcm.Modality)
 
-        assert dcm.BitsAllocated == 16, 'Expected BitsAllocated=16, got %d.' % dcm.BitsAllocated
+        if dcm.BitsAllocated != 16:
+            warnings.warn('Expected BitsAllocated=16, got %d.' % dcm.BitsAllocated)
 
-        assert dcm.PhotometricInterpretation == 'MONOCHROME2',\
-            'Expected PhotometricInterpretation=MONOCHROME2, got %s.' % dcm.PhotometricInterpretation
+        if dcm.PhotometricInterpretation != 'MONOCHROME2':
+            warnings.warn('Expected PhotometricInterpretation=MONOCHROME2, got %s.' % dcm.PhotometricInterpretation)
 
-        assert dcm.Rows == 512, 'Expected Rows=512, got %d.' % dcm.Rows
+        if dcm.Rows != 512:
+            warnings.warn('Expected Rows=512, got %d.' % dcm.Rows)
 
-        assert dcm.Columns == 512, 'Expected Columns=512, got %d.' % dcm.Columns
+        if dcm.Columns != 512:
+            warnings.warn('Expected Columns=512, got %d.' % dcm.Columns)
 
-        assert dcm.SamplesPerPixel == 1, 'Expected SamplesPerPixel=1, got %d.' % dcm.SamplesPerPixel
+        if dcm.SamplesPerPixel != 1:
+            warnings.warn('Expected SamplesPerPixel=1, got %d.' % dcm.SamplesPerPixel)
 
-        assert dcm.ImageOrientationPatient == [1, 0, 0, 0, 1, 0],\
-            'Expected ImageOrientationPatient=[1,0,0,0,1,0], got %s.' % dcm.ImageOrientationPatient
+        if dcm.ImageOrientationPatient != [1, 0, 0, 0, 1, 0]:
+            warnings.warn('Expected ImageOrientationPatient=[1,0,0,0,1,0], got %s.' % dcm.ImageOrientationPatient)
         
-        if dcm.BitsStored == 12:
-            assert dcm.pixel_array.max() < 4096, 'Pixel array values exceed 4095, but BitsStored=12.'
-        
-        try:
-            assert dcm.RescaleType in ['HU', 'US'], 'Expected RescaleType={empty,HU,US}, got %s.' % dcm.RescaleType
-        except:
-            if not rescale_type_raised:
-                rescale_type_raised = True
-                print(dcm.PatientID, 'RescaleType unavailable.')
-            
-        try:
-            assert dcm.SeriesDescription == 'Axial', 'Expected SeriesDescription=Axial, got %s.' % dcm.SeriesDescription
-        except:
-            if not series_description_raised:
-                series_description_raised = True
-                print(dcm.PatientID, 'SeriesDescription unavailable.')
+        if dcm.BitsStored == 12 and dcm.pixel_array.max() > 4095:
+            warnings.warn('Pixel array values exceed 4095, but BitsStored=12.')
     
     # Check if overlapping acquisitions exist
     # Edge case with two overlapping acquisitions: b8bb02d229361a623a4dc57aa0e5c485
@@ -98,7 +89,9 @@ def check_sequence(dcm_seq, tol=1e-2):
     for dcm in dcm_seq:
         try:
             acq = dcm.AcquisitionNumber
-        except:
+        except AttributeError as ex:
+            message = exception_template.format(type(ex).__name__, ex.args)
+            warnings.warn(message)
             acq = None
         
         if acq in positions:
@@ -120,7 +113,7 @@ def check_sequence(dcm_seq, tol=1e-2):
                 
                 print('Keeping acquisition', acq)
                 
-                dcm_seq = filter(lambda x: x.AcquisitionNumber == acq, dcm_seq)
+                dcm_seq = [d for d in dcm_seq if d.AcquisitionNumber == acq]
                 
                 break
             
@@ -138,7 +131,9 @@ def check_sequence(dcm_seq, tol=1e-2):
     dx_std = np.float32([dcm.PixelSpacing[1] for dcm in dcm_seq]).std()
     
     if (dz_std > tol) or (dy_std > tol) or (dx_std > tol):
-        raise Exception('Pixel spacing is not uniform.')
+        warnings.warn('Pixel spacing is not uniform.')
+
+    return dcm_seq
 
 
 # Convert raw dicom pixel values to array in Hounsfield Units.
@@ -150,6 +145,7 @@ def dcm2array(dcm):
     Returns:
         Image array in HU units.
     """
+    exception_template = "An exception of type {0} occurred. Arguments:\n{1!r}"
 
     # Apparently pydicom is already taking into consideration
     # the PixelRepresentation and BitsAllocated when making the pixel_array.
@@ -164,7 +160,9 @@ def dcm2array(dcm):
     # This is Type 3, so it might not be present in the dicom file
     try:
         padding = dcm.PixelPaddingValue
-    except:
+    except AttributeError as ex:
+        message = exception_template.format(type(ex).__name__, ex.args)
+        warnings.warn(message)
         padding = None
 
     # Determination of proper pixel padding value
@@ -175,14 +173,14 @@ def dcm2array(dcm):
         padding = int.from_bytes(padding, byteorder='little', signed=(representation == 1))
     
     # Set padded area to air (HU=-1000)
-    if padding:
+    if padding is not None:
         array[array == padding] = -1000 - intercept
 
     # Safety measure
     # There a few cases in which the pixel padding value is valid
-    # but does not correspond with the actual padded values in the data (typically -2000).
+    # but does not correspond with the actual padded values in the data (< -1000).
     # Furthermore, CT is represented at with 12 bits, hence it cannot exceed 4095.
-    array[array <= -2000] = -1000 - intercept
+    array[array <= -1000] = -1000 - intercept
     array[array > 4095] = 4095
 
     # Transform to Hounsfield Units.

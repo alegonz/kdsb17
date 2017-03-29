@@ -26,7 +26,7 @@ for patient_id in patients:
     try:
         # Get slice sequence
         dcm_seq = read_dcm_sequence(patient_id, base_path)
-        check_sequence(dcm_seq)
+        dcm_seq = check_sequence(dcm_seq)
         
         # Stack into 3D array in Hounsfield Units
         array, spacing = make_3d_array(dcm_seq)
@@ -37,19 +37,12 @@ for patient_id in patients:
         # Extract lungs
         mask_lungs, thres = make_lungs_mask(array_resampled, kernel_size=3)
         array_lungs, box = extract_lungs(array_resampled, mask_lungs, slice_drop_prob)
-    
-    except Exception as ex:
-        message = template.format(type(ex).__name__, ex.args)
-        print('fail', patient_id, message)
 
-        continue
-    
-    # Outputs
-    try:
-        png_filename = os.path.join(out_path, patient_id+'.png')
+        # Outputs
+        png_filename = os.path.join(out_path, patient_id + '.png')
         show_slices(array_lungs, filename=png_filename, every=5)
-        
-        npz_filename = os.path.join(out_path, patient_id+'.npz')
+
+        npz_filename = os.path.join(out_path, patient_id + '.npz')
         np.savez_compressed(npz_filename, array_lungs=array_lungs)
     
     except Exception as ex:
@@ -57,10 +50,11 @@ for patient_id in patients:
         print('fail', patient_id, message)
 
         continue
-    
-    print(
-        'success',
-        patient_id, thres, box,
-        array.shape, array_resampled.shape, array_lungs.shape
-        )
+
+    else:
+        print(
+            'success',
+            patient_id, thres, box,
+            array.shape, array_resampled.shape, array_lungs.shape
+            )
 

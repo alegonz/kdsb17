@@ -6,8 +6,8 @@ def show_slices(array, filename=None, every=5, cols=10):
     
     n = int(np.ceil(len(array)/every))
     rows = int(np.ceil(n/cols))
-    
-    fig, ax = plt.subplots(rows, cols, figsize=[24, 12])
+
+    fig, ax = plt.subplots(rows, cols, figsize=(24, 12))
     for i, idx in enumerate(range(0, len(array), every)):
         r = i // cols
         c = i % cols
@@ -27,6 +27,8 @@ def show_slices(array, filename=None, every=5, cols=10):
         fig.savefig(filename)
     else:
         plt.show()
+
+    plt.close('all')
     
     
     
