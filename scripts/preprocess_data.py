@@ -11,11 +11,16 @@ from kdsb17.preprocessing import (
 
 from kdsb17.plotutils import show_slices
 
-base_path = '/data/stage1/'
+base_path = '/data/data/stage1/'
 out_path = '/data/analysis/temp/'
 
-new_spacing = (2, 2, 2)
+new_spacing = (1, 1, 1)  # (2, 2, 2)
+kernel_size = 5  # 3
 slice_drop_prob = (0.005, 0.005)
+
+print('New spacing =', new_spacing)
+print('Kernel size =', kernel_size)
+print('Slice drop probability =', slice_drop_prob)
 
 patients = [os.path.basename(path) for path in os.listdir(base_path)]
 
@@ -35,7 +40,7 @@ for patient_id in patients:
         array_resampled = resample(array, spacing, new_spacing)
         
         # Extract lungs
-        mask_lungs, thres = make_lungs_mask(array_resampled, kernel_size=3)
+        mask_lungs, thres = make_lungs_mask(array_resampled, kernel_size=kernel_size)
         array_lungs, box = extract_lungs(array_resampled, mask_lungs, slice_drop_prob)
 
         # Outputs

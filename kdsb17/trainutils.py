@@ -1,6 +1,5 @@
 import os
 from glob import glob
-import random
 import numpy as np
 
 
@@ -26,32 +25,72 @@ def read_labels(path, header=True):
     return labels
 
 
-def build_generator(data_path, labels_path, mean=0, rescale_range=(-1000, 400), seed=2017):
+def random_rotation(x):
+    """Random rotation of a 3D array.
+    48 unique rotations = 6 (sides) x 4 (rotations of each side) x 2 (original and mirror).
+    
+    Args:
+        x (numpy.array): 3D array to be rotated
+    
+    Returns:
+        Randomly rotated array
+    """
+    # Convention: dim0 = z, dim1 = y, dim2=x
+
+    if x.ndim != 3:
+        raise ValueError('Array must be 3D. Got %d dimensions.' % x.ndim)
+
+    # 3D array faces table
+    # Rotations are either around the zy or zx planes.
+    faces = [
+        ((0, 1), 0),  # keep front face
+        ((0, 1), 1),  # get bottom face front
+        ((0, 1), 2),  # get back face front
+        ((0, 1), 3),  # get top face front
+        ((0, 2), -1),  # get right face front
+        ((0, 2), 1)  # get left face front
+    ]
+
+    # Get a face front randomly
+    axes1, turns1 = faces[np.random.choice(range(6))]
+    xr = np.rot90(x, k=turns1, axes=axes1)
+
+    # Rotate that face randomly (rotation around xy plane)
+    turns2 = np.random.choice([0, 1, 2, 3])
+    axes2 = (1, 2)
+    xr = np.rot90(xr, k=turns2, axes=axes2)
+
+    # Mirror the array randomly
+    mirror = np.random.choice([True, False])
+    if mirror:
+        xr = np.fliplr(xr)
+
+    return xr.copy()
+
+
+def build_generator(data_path, labels_path,
+                    mean=0, rescale_range=(-1000, 400),
+                    rotate_randomly=True, random_offset_range=(-100, 100)):
     """Data generator for keras model.
     Args:
         data_path (str): path to npz files with array data.
         labels_path (str): path to csv file with labels.
-        mean (float): Value for mean subtraction (scalar).
-        rescale_range (tuple of float): Range of values in the original data that will be mapped to [0, 1] respectively.
-        seed (int): Random seed for data file shuffling.
+        mean (float): Value for mean subtraction (scalar in HU units).
+        rescale_range (tuple of float): Range of values in (in HU units) that will be mapped to [0, 1] respectively.
+        rotate_randomly (bool): Rotate randomly arrays for data augmentation.
+        random_offset_range (tuple): Random offset range (in HU units) for data augmentation (None=no random offset).
     
     Returns:
          A generator instance.
     """
     # TODO: add support for batch sizes greater than 1.
     # This is accomplished by grouping arrays of similar size and padding each appropriately to a common size.
-    #
-    # TODO: add random 48 rotations
-    #
-    # TODO: consider random addition of constant value
-
-    random.seed(seed)
 
     paths = glob(os.path.join(data_path, '*.npz'))
     labels = read_labels(labels_path, header=True)
 
     while 1:
-        random.shuffle(paths)
+        np.random.shuffle(paths)
 
         for path in paths:
             # Input data
@@ -60,17 +99,18 @@ def build_generator(data_path, labels_path, mean=0, rescale_range=(-1000, 400), 
 
             x = x.astype('float32')
 
-            # Subtract mean and normalize
-            min_val, max_val = rescale_range
             x -= mean
+
+            if random_offset_range:
+                x += np.random.uniform(random_offset_range[0], random_offset_range[1])
+
+            if rotate_randomly:
+                x = random_rotation(x)
+
+            min_val, max_val = rescale_range
             x = (x - min_val) / (max_val - min_val)
 
-            # Add here random rotation
-            # Add here addition of random constant
-
-            # Add batch and channels dimensions
-            # TODO: currently Theano only. Add support for TensorFlow dim ordering.
-            x = np.expand_dims(np.expand_dims(x, 0), 0)
+            x = np.expand_dims(np.expand_dims(x, 0), 0)  # Add batch and channels dimensions (Theano format)
 
             # Output data
             patient_id, __ = os.path.splitext(os.path.basename(path))
