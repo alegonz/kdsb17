@@ -10,6 +10,14 @@
           <option name="port" value="22" />
         </fileTransfer>
       </webServer>
+      <webServer id="51f3a819-f371-4df6-9189-c799bf7d21b2" name="oregon-gpu" url="http://50.112.48.21">
+        <fileTransfer host="50.112.48.21" port="22" privateKey="$USER_HOME$/.ssh/kdsb17.pem" rootFolder="/data/code" accessType="SFTP" keyPair="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" />
+          </advancedOptions>
+          <option name="port" value="22" />
+        </fileTransfer>
+      </webServer>
     </option>
   </component>
 </project>

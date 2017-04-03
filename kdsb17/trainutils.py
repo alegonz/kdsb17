@@ -70,7 +70,7 @@ def random_rotation(x):
 
 def build_generator(data_path, labels_path,
                     mean=0, rescale_range=(-1000, 400),
-                    rotate_randomly=True, random_offset_range=(-100, 100)):
+                    rotate_randomly=True, random_offset_range=(-60, 60)):
     """Data generator for keras model.
     Args:
         data_path (str): path to npz files with array data.

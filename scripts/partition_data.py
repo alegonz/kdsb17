@@ -7,6 +7,12 @@ sys.path.append('/data/code/')
 from kdsb17.trainutils import read_labels
 
 
+def makedir(dir_path):
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+    return dir_path
+
+
 def make_symlinks(file_names, src_path, dst_path):
     """Make symbolic links.
     Args:
@@ -20,11 +26,16 @@ def make_symlinks(file_names, src_path, dst_path):
                    os.path.join(dst_path, file))
 
 
-base_path = '/data/data/'
-data_path = os.path.join(base_path, 'npz')
-in_sample_csv_path = os.path.join(base_path, 'stage1_labels.csv')
-out_of_sample_csv_path = os.path.join(base_path, 'stage1_sample_submission.csv')
+data_path = '/data/data/'
+dataset = 'npz_2mm_ks3_05p'
+
+all_path = os.path.join(data_path, dataset, 'all')
+in_sample_csv_path = os.path.join(data_path, 'stage1_labels.csv')
+out_of_sample_csv_path = os.path.join(data_path, 'stage1_sample_submission.csv')
+
 train_ratio = 0.8  # the rest is for validation
+
+subsets = {}
 
 # Read label data.
 in_sample_labels = read_labels(in_sample_csv_path, header=True)
@@ -37,18 +48,17 @@ n_train = int(len(patients) * train_ratio)
 random.seed(7102)
 random.shuffle(patients)
 
-train = patients[:n_train]
-validation = patients[n_train:]
+subsets['train'] = patients[:n_train]
+subsets['validation'] = patients[n_train:]
 
 # Test set
-test = list(out_of_sample_labels.keys())
+subsets['test'] = list(out_of_sample_labels.keys())
 
 # Make symbolic links
-make_symlinks([patient_id + '.npz' for patient_id in train],
-              data_path, os.path.join(base_path, 'train'))
+for name, patient_list in subsets.items():
 
-make_symlinks([patient_id + '.npz' for patient_id in validation],
-              data_path, os.path.join(base_path, 'validation'))
+    path = makedir(os.path.join(data_path, dataset, name))
+    relative_path = '../all'
 
-make_symlinks([patient_id + '.npz' for patient_id in test],
-              data_path, os.path.join(base_path, 'test'))
+    make_symlinks([patient_id + '.npz' for patient_id in patient_list],
+                  relative_path, path)
