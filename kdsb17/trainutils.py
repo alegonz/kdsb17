@@ -78,7 +78,6 @@ class GeneratorFactory:
             Format: ((hu1, s1), (hu2, s2)) means that the mapping will be hu1 --> s1 and hu2 --> s2.
         rotate_randomly (bool): Rotate randomly arrays for data augmentation.
         random_offset_range (None or tuple): Random offset range (in HU units) for data augmentation (None=no random offset).
-        seed (int): Seed for random generation.
 
     Returns:
          A generator instance.
@@ -86,15 +85,14 @@ class GeneratorFactory:
 
     def __init__(self, data_path, labels_path,
                  mean=-350, rescale_map=((-1000, -1), (400, 1)),
-                 rotate_randomly=True, random_offset_range=(-60, 60),
-                 seed=2017):
+                 rotate_randomly=True, random_offset_range=(-60, 60)):
 
         (hu1, s1), (hu2, s2) = rescale_map
         if (hu2 - hu1) == 0:
             raise ValueError('Invalid rescale mapping.')
 
         self.data_path = data_path
-        self.paths = glob(os.path.join(data_path, '*.npz'))
+        self.paths = sorted(glob(os.path.join(data_path, '*.npz')))
 
         self.labels_path = labels_path
         self.labels = read_labels(labels_path, header=True)
@@ -103,9 +101,6 @@ class GeneratorFactory:
         self.rescale_map = rescale_map
         self.rotate_randomly = rotate_randomly
         self.random_offset_range = random_offset_range
-
-        self.seed = seed
-        np.random.seed(seed)
 
     def _transform(self, x):
         """Transform sample into array to be fed into keras model. The transformation performs:
@@ -149,6 +144,7 @@ class GeneratorFactory:
         """
 
         while 1:
+
             np.random.shuffle(self.paths)
 
             for path in self.paths:
@@ -182,6 +178,7 @@ class GeneratorFactory:
             sizes.append(len(self.paths) % chunk_size)  # the last chunk will have less samples
 
         while 1:
+
             np.random.shuffle(self.paths)
 
             for chunk, size in enumerate(sizes):

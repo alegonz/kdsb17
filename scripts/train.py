@@ -4,7 +4,7 @@ import time
 sys.path.append('/data/code/')
 
 import numpy as np
-np.random.seed(1969)
+np.random.seed(1702)
 
 from keras.layers import Input, Dense, Dropout, Convolution3D, MaxPooling3D
 from keras.models import Model
@@ -21,7 +21,7 @@ dataset = 'npz_2mm_ks3_05p'
 in_sample_csv_path = '/data/data/stage1_labels.csv'
 
 # Training parameters
-nb_epoch = 5
+nb_epoch = 2
 
 # Define model
 input_array = Input(shape=(1, None, None, None))
