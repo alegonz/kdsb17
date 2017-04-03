@@ -5,29 +5,10 @@ import random
 sys.path.append('/data/code/')
 
 from kdsb17.trainutils import read_labels
-
-
-def makedir(dir_path):
-    if not os.path.exists(dir_path):
-        os.makedirs(dir_path)
-    return dir_path
-
-
-def make_symlinks(file_names, src_path, dst_path):
-    """Make symbolic links.
-    Args:
-        file_names: list of file names.
-        src_path: path containing the source files.
-        dst_path: path where the symlinks will be saved.
-    """
-
-    for file in file_names:
-        os.symlink(os.path.join(src_path, file),
-                   os.path.join(dst_path, file))
-
+from kdsb17.fileutils import makedir, make_symlinks
 
 data_path = '/data/data/'
-dataset = 'npz_2mm_ks3_05p'
+dataset = 'npz_1mm_ks5_05p'
 
 all_path = os.path.join(data_path, dataset, 'all')
 in_sample_csv_path = os.path.join(data_path, 'stage1_labels.csv')

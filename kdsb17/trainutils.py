@@ -68,15 +68,16 @@ def random_rotation(x):
     return xr.copy()
 
 
-def build_generator(data_path, labels_path,
-                    mean=0, rescale_range=(-1000, 400),
-                    rotate_randomly=True, random_offset_range=(-60, 60)):
+def create_generator(data_path, labels_path,
+                     mean=-350, rescale_map=((-1000, -1), (400, 1)),
+                     rotate_randomly=True, random_offset_range=(-60, 60)):
     """Data generator for keras model.
     Args:
         data_path (str): path to npz files with array data.
         labels_path (str): path to csv file with labels.
         mean (float): Value for mean subtraction (scalar in HU units).
-        rescale_range (tuple of float): Range of values in (in HU units) that will be mapped to [0, 1] respectively.
+        rescale_map (tuple of tuple): HU values to normalized values, linear mapping pairs.
+            Format: ((hu1, s1), (hu2, s2)) means that the mapping will be hu1 --> s1 and hu2 --> s2.
         rotate_randomly (bool): Rotate randomly arrays for data augmentation.
         random_offset_range (tuple): Random offset range (in HU units) for data augmentation (None=no random offset).
     
@@ -85,6 +86,10 @@ def build_generator(data_path, labels_path,
     """
     # TODO: add support for batch sizes greater than 1.
     # This is accomplished by grouping arrays of similar size and padding each appropriately to a common size.
+
+    (hu1, s1), (hu2, s2) = rescale_map
+    if (hu2 - hu1) == 0:
+        raise ValueError('Invalid rescale mapping.')
 
     paths = glob(os.path.join(data_path, '*.npz'))
     labels = read_labels(labels_path, header=True)
@@ -99,16 +104,18 @@ def build_generator(data_path, labels_path,
 
             x = x.astype('float32')
 
-            x -= mean
-
+            # Data augmentation
             if random_offset_range:
                 x += np.random.uniform(random_offset_range[0], random_offset_range[1])
 
             if rotate_randomly:
                 x = random_rotation(x)
 
-            min_val, max_val = rescale_range
-            x = (x - min_val) / (max_val - min_val)
+            # Mean subtraction and rescaling
+            x -= mean
+
+            m = (s2 - s1)/(hu2 - hu1)
+            x = m*(x - hu1) + s1
 
             x = np.expand_dims(np.expand_dims(x, 0), 0)  # Add batch and channels dimensions (Theano format)
 

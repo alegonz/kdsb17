@@ -17,6 +17,7 @@ out_path = '/data/analysis/temp/'
 new_spacing = (1, 1, 1)  # (2, 2, 2)
 kernel_size = 5  # 3
 slice_drop_prob = (0.005, 0.005)
+save_png = True
 
 print('New spacing =', new_spacing)
 print('Kernel size =', kernel_size)
@@ -44,8 +45,9 @@ for patient_id in patients:
         array_lungs, box = extract_lungs(array_resampled, mask_lungs, slice_drop_prob)
 
         # Outputs
-        png_filename = os.path.join(out_path, patient_id + '.png')
-        show_slices(array_lungs, filename=png_filename, every=5)
+        if save_png:
+            png_filename = os.path.join(out_path, patient_id + '.png')
+            show_slices(array_lungs, filename=png_filename, every=5)
 
         npz_filename = os.path.join(out_path, patient_id + '.npz')
         np.savez_compressed(npz_filename, array_lungs=array_lungs)
@@ -62,4 +64,3 @@ for patient_id in patients:
             patient_id, thres, box,
             array.shape, array_resampled.shape, array_lungs.shape
             )
-

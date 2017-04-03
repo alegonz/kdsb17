@@ -7,6 +7,7 @@ class SpatialPyramidPooling3D(Layer):
     """Three-dimensional Spatial Pyramid Pooling.
 
     An extension of the method of He. K et al (https://arxiv.org/abs/1406.4729) to the 3D case.
+    Currently, there is no overlap between bins, i.e. stride size = bin size
 
     Args:
         nb_bins_per_level (list of int): Number of bins into which the axes of the input volume is partitioned
