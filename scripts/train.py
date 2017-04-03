@@ -11,7 +11,7 @@ from keras.models import Model
 from keras.callbacks import ModelCheckpoint, EarlyStopping, CSVLogger
 
 from kdsb17.layers import SpatialPyramidPooling3D
-from kdsb17.trainutils import create_generator
+from kdsb17.trainutils import GeneratorFactory
 from kdsb17.fileutils import makedir
 
 # Data file parameters
@@ -20,7 +20,7 @@ data_path = '/data/data'
 dataset = 'npz_2mm_ks3_05p'
 in_sample_csv_path = '/data/data/stage1_labels.csv'
 
-# Training paremeters
+# Training parameters
 nb_epoch = 5
 
 # Define model
@@ -43,18 +43,23 @@ model.summary()
 
 # Create data generators
 train_path = os.path.join(data_path, dataset, 'train')
-nb_train_samples = len(os.listdir(train_path))
+# nb_train_samples = len(os.listdir(train_path))
+nb_train_samples = 50
 
 validation_path = os.path.join(data_path, dataset, 'validation')
-nb_val_samples = len(os.listdir(validation_path))
+# nb_val_samples = len(os.listdir(validation_path))
+nb_val_samples = 50
 
-train_generator = create_generator(train_path, labels_path=in_sample_csv_path,
+train_gen_factory = GeneratorFactory(train_path, labels_path=in_sample_csv_path,
+                                     mean=-350, rescale_map=((-1000, -1), (400, 1)),
+                                     rotate_randomly=True, random_offset_range=(-60, 60))
+
+val_gen_factory = GeneratorFactory(validation_path, labels_path=in_sample_csv_path,
                                    mean=-350, rescale_map=((-1000, -1), (400, 1)),
-                                   rotate_randomly=True, random_offset_range=(-60, 60))
+                                   rotate_randomly=False, random_offset_range=None)
 
-validation_generator = create_generator(validation_path, labels_path=in_sample_csv_path,
-                                        mean=-350, rescale_map=((-1000, -1), (400, 1)),
-                                        rotate_randomly=True, random_offset_range=(-60, 60))
+train_generator = train_gen_factory.create_on_memory(chunk_size=100)
+validation_generator = val_gen_factory.create_on_memory(chunk_size=100)
 
 # Create callbacks
 time_string = time.strftime('%Y%m%d_%H%M%S')

@@ -68,9 +68,7 @@ def random_rotation(x):
     return xr.copy()
 
 
-def create_generator(data_path, labels_path,
-                     mean=-350, rescale_map=((-1000, -1), (400, 1)),
-                     rotate_randomly=True, random_offset_range=(-60, 60)):
+class GeneratorFactory:
     """Data generator for keras model.
     Args:
         data_path (str): path to npz files with array data.
@@ -79,48 +77,134 @@ def create_generator(data_path, labels_path,
         rescale_map (tuple of tuple): HU values to normalized values, linear mapping pairs.
             Format: ((hu1, s1), (hu2, s2)) means that the mapping will be hu1 --> s1 and hu2 --> s2.
         rotate_randomly (bool): Rotate randomly arrays for data augmentation.
-        random_offset_range (tuple): Random offset range (in HU units) for data augmentation (None=no random offset).
-    
+        random_offset_range (None or tuple): Random offset range (in HU units) for data augmentation (None=no random offset).
+        seed (int): Seed for random generation.
+
     Returns:
          A generator instance.
     """
-    # TODO: add support for batch sizes greater than 1.
-    # This is accomplished by grouping arrays of similar size and padding each appropriately to a common size.
 
-    (hu1, s1), (hu2, s2) = rescale_map
-    if (hu2 - hu1) == 0:
-        raise ValueError('Invalid rescale mapping.')
+    def __init__(self, data_path, labels_path,
+                 mean=-350, rescale_map=((-1000, -1), (400, 1)),
+                 rotate_randomly=True, random_offset_range=(-60, 60),
+                 seed=2017):
 
-    paths = glob(os.path.join(data_path, '*.npz'))
-    labels = read_labels(labels_path, header=True)
+        (hu1, s1), (hu2, s2) = rescale_map
+        if (hu2 - hu1) == 0:
+            raise ValueError('Invalid rescale mapping.')
 
-    while 1:
-        np.random.shuffle(paths)
+        self.data_path = data_path
+        self.paths = glob(os.path.join(data_path, '*.npz'))
 
-        for path in paths:
-            # Input data
-            with np.load(path) as data:
-                x = data['array_lungs']
+        self.labels_path = labels_path
+        self.labels = read_labels(labels_path, header=True)
 
-            x = x.astype('float32')
+        self.mean = mean
+        self.rescale_map = rescale_map
+        self.rotate_randomly = rotate_randomly
+        self.random_offset_range = random_offset_range
 
-            # Data augmentation
-            if random_offset_range:
-                x += np.random.uniform(random_offset_range[0], random_offset_range[1])
+        self.seed = seed
+        np.random.seed(seed)
 
-            if rotate_randomly:
-                x = random_rotation(x)
+    def _transform(self, x):
+        """Transform sample into array to be fed into keras model. The transformation performs:
+        - Casting to float32
+        - Random rotation
+        - Random offset addition
+        - Mean subtraction
+        - Rescaling
+        - Change dimension to Theano format.
+        """
 
-            # Mean subtraction and rescaling
-            x -= mean
+        x = x.astype('float32')
 
-            m = (s2 - s1)/(hu2 - hu1)
-            x = m*(x - hu1) + s1
+        # Data augmentation
+        if self.random_offset_range:
+            x += np.random.uniform(low=self.random_offset_range[0],
+                                   high=self.random_offset_range[1])
 
-            x = np.expand_dims(np.expand_dims(x, 0), 0)  # Add batch and channels dimensions (Theano format)
+        if self.rotate_randomly:
+            x = random_rotation(x)
 
-            # Output data
-            patient_id, __ = os.path.splitext(os.path.basename(path))
-            y = np.array([labels[patient_id]])
+        # Mean subtraction and rescaling
+        x -= self.mean
 
-            yield (x, y)
+        (hu1, s1), (hu2, s2) = self.rescale_map
+        m = (s2 - s1) / (hu2 - hu1)
+        x = m * (x - hu1) + s1
+
+        x = np.expand_dims(np.expand_dims(x, 0), 0)  # Add batch and channels dimensions (Theano format)
+
+        return x
+
+    def create(self):
+        """Data generator for keras model. This function reads from file and feed into the model one sample at a time.
+
+        Args:
+            None.
+
+        Returns:
+             A generator instance.
+        """
+
+        while 1:
+            np.random.shuffle(self.paths)
+
+            for path in self.paths:
+                # Input data
+                with np.load(path) as data:
+                    x = data['array_lungs']
+
+                x = self._transform(x)
+
+                # Output data
+                patient_id, __ = os.path.splitext(os.path.basename(path))
+                label = self.labels[patient_id]
+                y = np.array([label])
+
+                yield (x, y)
+
+    def create_on_memory(self, chunk_size=100):
+        """Data generator for keras model. This function first uploads a chunk of samples into memory
+        and then feeds those samples to the model.
+        
+        Args:
+            chunk_size (int): number of samples to keep in memory at a time.
+            
+        Returns:
+             A generator instance.
+        """
+        nb_chunks = len(self.paths) // chunk_size
+
+        sizes = [chunk_size]*nb_chunks
+        if len(self.paths) % chunk_size != 0:
+            sizes.append(len(self.paths) % chunk_size)  # the last chunk will have less samples
+
+        while 1:
+            np.random.shuffle(self.paths)
+
+            for chunk, size in enumerate(sizes):
+
+                # Load chunk into memory
+                n1 = chunk*chunk_size
+                n2 = chunk*chunk_size + size
+
+                samples = []
+                for path in self.paths[n1:n2]:
+
+                    # model input
+                    with np.load(path) as data:
+                        x = data['array_lungs']
+
+                    x = self._transform(x)
+
+                    # model output
+                    patient_id, __ = os.path.splitext(os.path.basename(path))
+                    label = self.labels[patient_id]
+                    y = np.array([label])
+
+                    samples.append((x, y))
+
+                for x, y in samples:
+                    yield (x, y)
