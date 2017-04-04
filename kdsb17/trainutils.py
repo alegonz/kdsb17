@@ -25,43 +25,60 @@ def read_labels(path, header=True):
     return labels
 
 
-def random_rotation(x):
+class RotationPatterns48:
+    def __init__(self):
+        # Rotations around the zy or zx planes.
+        self.flips = [
+            ((0, 1), 0),   # keep front face
+            ((0, 1), 1),   # get bottom face front
+            ((0, 1), 2),   # get back face front
+            ((0, 1), 3),   # get top face front
+            ((0, 2), -1),  # get right face front
+            ((0, 2), 1)    # get left face front
+        ]
+
+        # Rotations around xy plane
+        self.turns = [
+            ((1, 2), 0),  # 0 degrees
+            ((1, 2), 1),  # 90 degrees
+            ((1, 2), 2),  # 180 degrees
+            ((1, 2), 3)   # 270 degrees
+        ]
+
+        self.mirrors = [False, True]
+
+    def __getitem__(self, key):
+        key = key % 48
+
+        flip = key // 8
+        turn = (key % 8) // 2
+        mirror = key % 2
+
+        return self.flips[flip], self.turns[turn], self.mirrors[mirror]
+
+
+def rotate(x, pattern):
     """Random rotation of a 3D array.
     48 unique rotations = 6 (sides) x 4 (rotations of each side) x 2 (original and mirror).
-    
+
     Args:
         x (numpy.array): 3D array to be rotated
-    
+        pattern (tuple): an element of a RotationPatterns48 instance
+
     Returns:
         Randomly rotated array
     """
     # Convention: dim0 = z, dim1 = y, dim2=x
-
     if x.ndim != 3:
         raise ValueError('Array must be 3D. Got %d dimensions.' % x.ndim)
 
-    # 3D array faces table
-    # Rotations are either around the zy or zx planes.
-    faces = [
-        ((0, 1), 0),  # keep front face
-        ((0, 1), 1),  # get bottom face front
-        ((0, 1), 2),  # get back face front
-        ((0, 1), 3),  # get top face front
-        ((0, 2), -1),  # get right face front
-        ((0, 2), 1)  # get left face front
-    ]
+    (axes1, k1), (axes2, k2), mirror = pattern
 
-    # Get a face front randomly
-    axes1, turns1 = faces[np.random.choice(range(6))]
-    xr = np.rot90(x, k=turns1, axes=axes1)
-
-    # Rotate that face randomly (rotation around xy plane)
-    turns2 = np.random.choice([0, 1, 2, 3])
-    axes2 = (1, 2)
-    xr = np.rot90(xr, k=turns2, axes=axes2)
-
+    # Get the specified face front
+    xr = np.rot90(x, k=k1, axes=axes1)
+    # Turn that face
+    xr = np.rot90(xr, k=k2, axes=axes2)
     # Mirror the array randomly
-    mirror = np.random.choice([True, False])
     if mirror:
         xr = np.fliplr(xr)
 
@@ -76,8 +93,8 @@ class GeneratorFactory:
         mean (float): Value for mean subtraction (scalar in HU units).
         rescale_map (tuple of tuple): HU values to normalized values, linear mapping pairs.
             Format: ((hu1, s1), (hu2, s2)) means that the mapping will be hu1 --> s1 and hu2 --> s2.
-        rotate_randomly (bool): Rotate randomly arrays for data augmentation.
-        random_offset_range (None or tuple): Random offset range (in HU units) for data augmentation (None=no random offset).
+        random_rotation (bool): Rotate randomly arrays for data augmentation.
+        random_offset_range (None or tuple): Offset range (in HU units) for data augmentation (None=no random offset).
 
     Returns:
          A generator instance.
@@ -85,7 +102,7 @@ class GeneratorFactory:
 
     def __init__(self, data_path, labels_path,
                  mean=-350, rescale_map=((-1000, -1), (400, 1)),
-                 rotate_randomly=True, random_offset_range=(-60, 60)):
+                 random_rotation=True, random_offset_range=(-60, 60)):
 
         (hu1, s1), (hu2, s2) = rescale_map
         if (hu2 - hu1) == 0:
@@ -99,7 +116,8 @@ class GeneratorFactory:
 
         self.mean = mean
         self.rescale_map = rescale_map
-        self.rotate_randomly = rotate_randomly
+        self.random_rotation = random_rotation
+        self.rotation_patterns = RotationPatterns48()
         self.random_offset_range = random_offset_range
 
     def _transform(self, x):
@@ -111,6 +129,7 @@ class GeneratorFactory:
         - Rescaling
         - Change dimension to Theano format.
         """
+        # TODO: fix the order of mean/random offset/rescaling
 
         x = x.astype('float32')
 
@@ -119,8 +138,9 @@ class GeneratorFactory:
             x += np.random.uniform(low=self.random_offset_range[0],
                                    high=self.random_offset_range[1])
 
-        if self.rotate_randomly:
-            x = random_rotation(x)
+        if self.random_rotation:
+            idx = np.random.randint(low=0, high=48)
+            x = rotate(x, self.rotation_patterns[idx])
 
         # Mean subtraction and rescaling
         x -= self.mean
