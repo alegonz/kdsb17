@@ -25,6 +25,59 @@ def read_labels(path, header=True):
     return labels
 
 
+def rotate3d(x, pattern):
+    """Random rotation of a 3D array.
+    48 unique rotations = 6 (sides) x 4 (rotations of each side) x 2 (original and mirror).
+
+    Args:
+        x (numpy.array): 3D array to be rotated
+        pattern (tuple): an element of a RotationPatterns48 instance
+
+    Returns:
+        Randomly rotated array
+    """
+    # Convention: dim0 = z, dim1 = y, dim2=x
+    if x.ndim != 3:
+        raise ValueError('Array must be 3D. Got %d dimensions.' % x.ndim)
+
+    (axes1, k1), (axes2, k2), mirror = pattern
+
+    # Get the specified face front
+    xr = np.rot90(x, k=k1, axes=axes1)
+    # Turn that face
+    xr = np.rot90(xr, k=k2, axes=axes2)
+    # Mirror the array randomly
+    if mirror:
+        xr = np.fliplr(xr)
+
+    return xr.copy()
+
+
+def get_crop_idx(input_size, output_size):
+    """Get the crop sizes necessary to match the CAE output image size.
+
+    Args:
+        input_size  (tuple): input array size (z, y, x)
+        output_size (tuple): output array size (z, y, x)
+    Returns:
+        crop indexes along each dimension (tuple): ((dim1_1, dim1_2), (dim2_1, dim2_2), ..., (dimN_1, dimN_2))
+    """
+
+    if any([i < o for i, o in zip(input_size, output_size)]):
+        raise ValueError('The output size must be less than or equal to the input size.')
+
+    idx = []
+
+    for dim_in, dim_out in zip(input_size, output_size):
+        diff = dim_in - dim_out
+        idx1 = diff // 2
+        idx2 = dim_in - (diff // 2 + diff % 2)
+
+        idx.extend([(idx1, idx2)])
+
+    return tuple(idx)
+
+
 class RotationPatterns48:
     def __init__(self):
         # Rotations around the zy or zx planes.
@@ -57,36 +110,8 @@ class RotationPatterns48:
         return self.flips[flip], self.turns[turn], self.mirrors[mirror]
 
 
-def rotate(x, pattern):
-    """Random rotation of a 3D array.
-    48 unique rotations = 6 (sides) x 4 (rotations of each side) x 2 (original and mirror).
-
-    Args:
-        x (numpy.array): 3D array to be rotated
-        pattern (tuple): an element of a RotationPatterns48 instance
-
-    Returns:
-        Randomly rotated array
-    """
-    # Convention: dim0 = z, dim1 = y, dim2=x
-    if x.ndim != 3:
-        raise ValueError('Array must be 3D. Got %d dimensions.' % x.ndim)
-
-    (axes1, k1), (axes2, k2), mirror = pattern
-
-    # Get the specified face front
-    xr = np.rot90(x, k=k1, axes=axes1)
-    # Turn that face
-    xr = np.rot90(xr, k=k2, axes=axes2)
-    # Mirror the array randomly
-    if mirror:
-        xr = np.fliplr(xr)
-
-    return xr.copy()
-
-
-class GeneratorFactory:
-    """Data generator for keras model.
+class Generator3dCNN:
+    """Data generator for 3D CNN.
     Args:
         data_path (str): path to npz files with array data.
         labels_path (str): path to csv file with labels.
@@ -129,7 +154,6 @@ class GeneratorFactory:
         - Rescaling
         - Change dimension to Theano format.
         """
-        # TODO: fix the order of mean/random offset/rescaling
 
         x = x.astype('float32')
 
@@ -140,12 +164,15 @@ class GeneratorFactory:
 
         if self.random_rotation:
             idx = np.random.randint(low=0, high=48)
-            x = rotate(x, self.rotation_patterns[idx])
+            x = rotate3d(x, self.rotation_patterns[idx])
 
         # Mean subtraction and rescaling
         x -= self.mean
 
         (hu1, s1), (hu2, s2) = self.rescale_map
+        hu1 -= self.mean  # Account for mean shift
+        hu2 -= self.mean
+
         m = (s2 - s1) / (hu2 - hu1)
         x = m * (x - hu1) + s1
 
@@ -153,8 +180,9 @@ class GeneratorFactory:
 
         return x
 
-    def create(self):
-        """Data generator for keras model. This function reads from file and feed into the model one sample at a time.
+    def for_binary_classifier(self):
+        """Data generator for binary classification model.
+        Reads from file and feed into the model one sample at a time.
 
         Args:
             None.
@@ -181,9 +209,9 @@ class GeneratorFactory:
 
                 yield (x, y)
 
-    def create_on_memory(self, chunk_size=100):
-        """Data generator for keras model. This function first uploads a chunk of samples into memory
-        and then feeds those samples to the model.
+    def for_binary_classifier_chunked(self, chunk_size=100):
+        """Data generator for binary classification model.
+        First uploads a chunk of samples into memory and then feeds those samples to the model one at time.
         
         Args:
             chunk_size (int): number of samples to keep in memory at a time.
@@ -225,3 +253,45 @@ class GeneratorFactory:
 
                 for x, y in samples:
                     yield (x, y)
+
+    def for_autoencoder_chunked(self, input_size, output_size, batch_size=32, chunk_size=32):
+
+        # Calculate chunk indices
+        nb_chunks = len(self.paths) // chunk_size
+
+        chunks = []
+        for chunk in range(nb_chunks):
+            n1 = chunk_size * chunk
+            n2 = chunk_size * (chunk + 1)
+            chunks.append((n1, n2))
+
+        if len(self.paths) % chunk_size != 0:
+            n1 = chunk_size * nb_chunks
+            n2 = n1 + len(self.paths) % chunk_size
+            chunks.append((n1, n2))  # the last chunk will have less samples
+
+        # Get appropriate cropping indices to match input and output sizes
+        (z1, z2), (y1, y2), (x1, x2) = get_crop_idx(input_size, output_size)
+
+        while 1:
+            np.random.shuffle(self.paths)
+
+            for n1, n2 in chunks:
+
+                # Load chunk of arrays into memory
+                arrays = []
+                for path in self.paths[n1:n2]:
+                    with np.load(path) as data:
+                        x = data['array_lungs']
+                    arrays.append(x)
+
+                # Extract samples from each array (these are views)
+                samples = []
+
+                # Shuffle the samples
+                np.random.sort(samples)
+
+                for x_in in samples:
+                    x = self._transform(x)
+                    x_out = x_in[:, :, z1:z2, y1:y2, x1:x2]
+                    yield (x_in, x_out)
