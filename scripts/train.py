@@ -24,7 +24,6 @@ in_sample_csv_path = '/data/data/stage1_labels.csv'
 # Training parameters
 nb_epoch = 3
 optimizer = 'adam'
-# optimizer = SGD(lr=1e-5, momentum=0.9)
 
 # Define model
 input_array = Input(shape=(1, None, None, None))
