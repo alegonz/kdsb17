@@ -2,15 +2,7 @@
 <project version="4">
   <component name="WebServers">
     <option name="servers">
-      <webServer id="ba0113fc-2758-4b6d-a0b0-c4d754ce74cd" name="oregon" url="http://35.163.75.12">
-        <fileTransfer host="35.163.75.12" port="22" privateKey="$USER_HOME$/.ssh/kdsb17.pem" rootFolder="/data/code" accessType="SFTP" keyPair="true">
-          <advancedOptions>
-            <advancedOptions dataProtectionLevel="Private" />
-          </advancedOptions>
-          <option name="port" value="22" />
-        </fileTransfer>
-      </webServer>
-      <webServer id="51f3a819-f371-4df6-9189-c799bf7d21b2" name="oregon-gpu" url="http://50.112.48.21">
+      <webServer id="22ea5998-1dc6-469c-968e-fe5ff67f2044" name="oregon-gpu" url="http://50.112.48.21">
         <fileTransfer host="50.112.48.21" port="22" privateKey="$USER_HOME$/.ssh/kdsb17.pem" rootFolder="/data/code" accessType="SFTP" keyPair="true">
           <advancedOptions>
             <advancedOptions dataProtectionLevel="Private" />

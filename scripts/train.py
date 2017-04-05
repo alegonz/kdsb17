@@ -6,14 +6,16 @@ sys.path.append('/data/code/')
 import numpy as np
 np.random.seed(1988)
 
-from keras.layers import Input, Dense, Dropout, Convolution3D, MaxPooling3D, Activation
+from keras import backend
+from keras.layers import Input, Dense, Convolution3D, MaxPooling3D, Activation
 from keras.models import Model
-# from keras.optimizers import SGD
 from keras.callbacks import ModelCheckpoint, EarlyStopping, CSVLogger
 
 from kdsb17.layers import SpatialPyramidPooling3D
 from kdsb17.trainutils import GeneratorFactory
 from kdsb17.fileutils import makedir
+
+print('image_dim_ordering:', backend.image_dim_ordering())
 
 # Data file parameters
 models_path = '/data/models'
@@ -22,7 +24,7 @@ dataset = 'npz_2mm_ks3_05p'
 in_sample_csv_path = '/data/data/stage1_labels.csv'
 
 # Training parameters
-nb_epoch = 3
+nb_epoch = 2
 optimizer = 'adam'
 
 # Define model
@@ -40,9 +42,7 @@ h = Activation(activation='relu')(h)
 h = SpatialPyramidPooling3D([1, 2, 4])(h)
 
 h = Dense(256, activation='sigmoid')(h)
-# h = Dropout(0.5)(h)
 h = Dense(256, activation='sigmoid')(h)
-# h = Dropout(0.5)(h)
 output_array = Dense(1, activation='sigmoid')(h)
 
 model = Model(input_array, output_array)
@@ -51,10 +51,12 @@ model.summary()
 
 # Create data generators
 train_path = os.path.join(data_path, dataset, 'train')
-nb_train_samples = len(os.listdir(train_path))
+# nb_train_samples = len(os.listdir(train_path))
+nb_train_samples = 20
 
 validation_path = os.path.join(data_path, dataset, 'validation')
-nb_val_samples = len(os.listdir(validation_path))
+# nb_val_samples = len(os.listdir(validation_path))
+nb_val_samples = 20
 
 train_gen_factory = GeneratorFactory(train_path, labels_path=in_sample_csv_path,
                                      mean=-350, rescale_map=((-1000, -1), (400, 1)),
