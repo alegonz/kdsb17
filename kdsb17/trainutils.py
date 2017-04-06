@@ -1,4 +1,5 @@
 import os
+from itertools import product
 from glob import glob
 import numpy as np
 
@@ -50,7 +51,7 @@ def rotate3d(x, pattern):
     if mirror:
         xr = np.fliplr(xr)
 
-    return xr.copy()
+    return xr
 
 
 def get_crop_idx(input_size, output_size):
@@ -120,6 +121,7 @@ class Generator3dCNN:
             Format: ((hu1, s1), (hu2, s2)) means that the mapping will be hu1 --> s1 and hu2 --> s2.
         random_rotation (bool): Rotate randomly arrays for data augmentation.
         random_offset_range (None or tuple): Offset range (in HU units) for data augmentation (None=no random offset).
+            Suggested value: (-60, 60)
 
     Returns:
          A generator instance.
@@ -127,14 +129,14 @@ class Generator3dCNN:
 
     def __init__(self, data_path, labels_path,
                  mean=-350, rescale_map=((-1000, -1), (400, 1)),
-                 random_rotation=True, random_offset_range=(-60, 60)):
+                 random_rotation=False, random_offset_range=None):
 
         (hu1, s1), (hu2, s2) = rescale_map
         if (hu2 - hu1) == 0:
             raise ValueError('Invalid rescale mapping.')
 
         self.data_path = data_path
-        self.paths = sorted(glob(os.path.join(data_path, '*.npz')))
+        self.patients = sorted(glob(os.path.join(data_path, '*.npz')))
 
         self.labels_path = labels_path
         self.labels = read_labels(labels_path, header=True)
@@ -193,17 +195,17 @@ class Generator3dCNN:
 
         while 1:
 
-            np.random.shuffle(self.paths)
+            np.random.shuffle(self.patients)
 
-            for path in self.paths:
+            for patient in self.patients:
                 # Input data
-                with np.load(path) as data:
+                with np.load(patient) as data:
                     x = data['array_lungs']
 
                 x = self._transform(x)
 
                 # Output data
-                patient_id, __ = os.path.splitext(os.path.basename(path))
+                patient_id, __ = os.path.splitext(os.path.basename(patient))
                 label = self.labels[patient_id]
                 y = np.array([label])
 
@@ -219,15 +221,15 @@ class Generator3dCNN:
         Returns:
              A generator instance.
         """
-        nb_chunks = len(self.paths) // chunk_size
+        nb_chunks = len(self.patients) // chunk_size
 
         sizes = [chunk_size]*nb_chunks
-        if len(self.paths) % chunk_size != 0:
-            sizes.append(len(self.paths) % chunk_size)  # the last chunk will have less samples
+        if len(self.patients) % chunk_size != 0:
+            sizes.append(len(self.patients) % chunk_size)  # the last chunk will have less samples
 
         while 1:
 
-            np.random.shuffle(self.paths)
+            np.random.shuffle(self.patients)
 
             for chunk, size in enumerate(sizes):
 
@@ -236,16 +238,16 @@ class Generator3dCNN:
                 n2 = chunk*chunk_size + size
 
                 samples = []
-                for path in self.paths[n1:n2]:
+                for patient in self.patients[n1:n2]:
 
                     # model input
-                    with np.load(path) as data:
+                    with np.load(patient) as data:
                         x = data['array_lungs']
 
                     x = self._transform(x)
 
                     # model output
-                    patient_id, __ = os.path.splitext(os.path.basename(path))
+                    patient_id, __ = os.path.splitext(os.path.basename(patient))
                     label = self.labels[patient_id]
                     y = np.array([label])
 
@@ -254,10 +256,10 @@ class Generator3dCNN:
                 for x, y in samples:
                     yield (x, y)
 
-    def for_autoencoder_chunked(self, input_size, output_size, batch_size=32, chunk_size=32):
+    def for_autoencoder_chunked(self, input_size, batch_size=32, chunk_size=150):
 
         # Calculate chunk indices
-        nb_chunks = len(self.paths) // chunk_size
+        nb_chunks = len(self.patients) // chunk_size
 
         chunks = []
         for chunk in range(nb_chunks):
@@ -265,33 +267,46 @@ class Generator3dCNN:
             n2 = chunk_size * (chunk + 1)
             chunks.append((n1, n2))
 
-        if len(self.paths) % chunk_size != 0:
+        if len(self.patients) % chunk_size != 0:
             n1 = chunk_size * nb_chunks
-            n2 = n1 + len(self.paths) % chunk_size
-            chunks.append((n1, n2))  # the last chunk will have less samples
+            n2 = n1 + len(self.patients) % chunk_size
+            chunks.append((n1, n2))  # the last chunk will have less patients
 
-        # Get appropriate cropping indices to match input and output sizes
-        (z1, z2), (y1, y2), (x1, x2) = get_crop_idx(input_size, output_size)
-
+        # Generator's endless loop starts here
         while 1:
-            np.random.shuffle(self.paths)
+            np.random.shuffle(self.patients)
 
             for n1, n2 in chunks:
 
-                # Load chunk of arrays into memory
+                # Load chunk of patient arrays into memory
                 arrays = []
-                for path in self.paths[n1:n2]:
-                    with np.load(path) as data:
+                for patient in self.patients[n1:n2]:
+                    with np.load(patient) as data:
                         x = data['array_lungs']
                     arrays.append(x)
 
-                # Extract samples from each array (these are views)
+                # Extract samples from each array (these are just views)
                 samples = []
+                for array in arrays:
+                    nb_bins_z, nb_bins_y, nb_bins_x = [n//s for n, s in zip(array.shape, input_size)]
+
+                    for i, j, k in product(range(nb_bins_z), range(nb_bins_y), range(nb_bins_x)):
+                        # each combination of i,j,k is a sample
+                        i1, i2 = i * input_size[0], (i + 1) * input_size[0]
+                        j1, j2 = j * input_size[1], (j + 1) * input_size[1]
+                        k1, k2 = k * input_size[2], (k + 1) * input_size[2]
+
+                        samples.append(array[i1:i2, j1:j2, k1:k2])
 
                 # Shuffle the samples
-                np.random.sort(samples)
+                np.random.shuffle(samples)
 
-                for x_in in samples:
-                    x = self._transform(x)
-                    x_out = x_in[:, :, z1:z2, y1:y2, x1:x2]
-                    yield (x_in, x_out)
+                # Yield batches
+                x = np.zeros((batch_size, 1, input_size[0], input_size[1], input_size[2]), dtype='float32')
+                idx = 0
+                for sample in samples:
+                    x[idx, 0] = self._transform(sample)
+                    idx += 1
+
+                    if (idx % batch_size) == 0:
+                        yield (x, x)
