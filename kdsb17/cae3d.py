@@ -1,4 +1,4 @@
-from keras.layers import Input, Convolution3D, MaxPooling3D, UpSampling3D
+from keras.layers import Input, Convolution3D, MaxPooling3D, UpSampling3D, Activation
 from keras.models import Model
 
 
@@ -12,15 +12,17 @@ class CAE3d:
     def _encoder(self, layer):
 
         for nb_filters in self.nb_filters_per_layer:
-            layer = Convolution3D(nb_filters, 3, 3, 3, activation='relu', border_mode='same')(layer)
-            layer = MaxPooling3D((2, 2, 2), border_mode='same')(layer)
+            layer = Convolution3D(nb_filters, 3, 3, 3, border_mode='same')(layer)
+            layer = Activation('relu')(layer)
+            layer = MaxPooling3D((2, 2, 2), border_mode='valid')(layer)
 
         return layer
 
     def _decoder(self, layer):
 
         for nb_filters in self.nb_filters_per_layer[::-1]:
-            layer = Convolution3D(nb_filters, 3, 3, 3, activation='relu', border_mode='same')(layer)
+            layer = Convolution3D(nb_filters, 3, 3, 3, border_mode='same')(layer)
+            layer = Activation('relu')(layer)
             layer = UpSampling3D((2, 2, 2))(layer)
 
         return layer

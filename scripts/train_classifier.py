@@ -52,11 +52,11 @@ model.summary()
 # Create data generators
 train_path = os.path.join(data_path, dataset, 'train')
 # nb_train_samples = len(os.listdir(train_path))
-nb_train_samples = 20
+nb_train_samples = 5
 
 validation_path = os.path.join(data_path, dataset, 'validation')
 # nb_val_samples = len(os.listdir(validation_path))
-nb_val_samples = 20
+nb_val_samples = 5
 
 train_gen_factory = Generator3dCNN(train_path, labels_path=in_sample_csv_path,
                                    mean=-350, rescale_map=((-1000, -1), (400, 1)),
@@ -71,7 +71,7 @@ validation_generator = val_gen_factory.for_binary_classifier_chunked(chunk_size=
 
 # Create callbacks
 time_string = time.strftime('%Y%m%d_%H%M%S')
-out_path = makedir(os.path.join(models_path, time_string))  # output directory for model files and training log
+out_path = makedir(os.path.join(models_path, 'classifier', time_string))  # dir for model files and log
 weights_template = 'weights.{epoch:02d}-{val_loss:.2f}.hdf5'
 
 checkpointer = ModelCheckpoint(filepath=os.path.join(out_path, weights_template),

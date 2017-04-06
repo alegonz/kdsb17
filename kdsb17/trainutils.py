@@ -128,7 +128,7 @@ class Generator3dCNN:
     """
 
     def __init__(self, data_path, labels_path,
-                 mean=-350, rescale_map=((-1000, -1), (400, 1)),
+                 mean=-346.65, rescale_map=((-1000, -1), (400, 1)),
                  random_rotation=False, random_offset_range=None):
 
         (hu1, s1), (hu2, s2) = rescale_map
@@ -168,15 +168,14 @@ class Generator3dCNN:
             idx = np.random.randint(low=0, high=48)
             x = rotate3d(x, self.rotation_patterns[idx])
 
-        # Mean subtraction and rescaling
-        x -= self.mean
-
+        # Rescaling
         (hu1, s1), (hu2, s2) = self.rescale_map
-        hu1 -= self.mean  # Account for mean shift
-        hu2 -= self.mean
 
         m = (s2 - s1) / (hu2 - hu1)
         x = m * (x - hu1) + s1
+
+        # Mean subtraction
+        x -= (m * (self.mean - hu1) + s1)
 
         x = np.expand_dims(np.expand_dims(x, 0), 0)  # Add batch and channels dimensions (Theano format)
 
@@ -303,9 +302,10 @@ class Generator3dCNN:
 
                 # Yield batches
                 x = np.zeros((batch_size, 1, input_size[0], input_size[1], input_size[2]), dtype='float32')
+
                 idx = 0
                 for sample in samples:
-                    x[idx, 0] = self._transform(sample)
+                    x[idx % batch_size, 0] = self._transform(sample)
                     idx += 1
 
                     if (idx % batch_size) == 0:
