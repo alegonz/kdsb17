@@ -16,8 +16,6 @@ class SpatialPyramidPooling3D(Layer):
             e.g. if [1, 2, 4] then each volume (each channel) is divided and pooled across
             1 (=1**3) + 8 (=2**3) + 64 (=4**3) = 73 regions in 3 levels, yielding 73*nb_channels features.
 
-        pooling_mode (str): Either 'max' for max pooling or 'mean' for average pooling.
-
     # Input shape
         5D tensor with shape:
         `(samples, channels, dim1, dim2, dim3)` if dim_ordering='th'
@@ -29,17 +27,10 @@ class SpatialPyramidPooling3D(Layer):
         nb_channels * sum([nb_bins**3 for nb_bins in nb_bins_per_layer])
     """
 
-    def __init__(self, nb_bins_per_level, pooling_mode='max', **kwargs):
+    def __init__(self, nb_bins_per_level, **kwargs):
 
         self.dim_ordering = K.image_dim_ordering()
         self.nb_bins_per_level = nb_bins_per_level
-
-        if pooling_mode == 'max':
-            self.poolfunc = K.max
-        elif pooling_mode == 'mean':
-            self.poolfunc = K.mean
-        else:
-            raise ValueError('Invalid pooling mode; must be either max or mean.')
 
         super(SpatialPyramidPooling3D, self).__init__(**kwargs)
 
@@ -51,6 +42,11 @@ class SpatialPyramidPooling3D(Layer):
             self.nb_channels = input_shape[4]
 
         super(SpatialPyramidPooling3D, self).build(input_shape)
+
+    def get_config(self):
+        config = {'nb_bins_per_level': self.nb_bins_per_level}
+        base_config = super(SpatialPyramidPooling3D, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
 
     def get_output_shape_for(self, input_shape):
 
@@ -79,10 +75,10 @@ class SpatialPyramidPooling3D(Layer):
                 k1, k2 = k * bin_size_k, (k + 1) * bin_size_k
 
                 if self.dim_ordering == 'th':
-                    pooled_features = self.poolfunc(x[:, :, i1:i2, j1:j2, k1:k2], axis=(2, 3, 4))
+                    pooled_features = K.max(x[:, :, i1:i2, j1:j2, k1:k2], axis=(2, 3, 4))
 
                 elif self.dim_ordering == 'tf':
-                    pooled_features = self.poolfunc(x[:, i1:i2, j1:j2, k1:k2, :], axis=(1, 2, 3))
+                    pooled_features = K.max(x[:, i1:i2, j1:j2, k1:k2, :], axis=(1, 2, 3))
 
                 outputs.append(pooled_features)
 

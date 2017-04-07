@@ -10,7 +10,7 @@ from keras import backend
 from keras.callbacks import ModelCheckpoint, EarlyStopping, CSVLogger
 
 from kdsb17.cae3d import CAE3d
-from kdsb17.trainutils import Generator3dCNN
+from kdsb17.trainutils import Generator3dCNN, BatchLossCSVLogger
 from kdsb17.fileutils import makedir
 
 print('image_dim_ordering:', backend.image_dim_ordering())
@@ -18,18 +18,18 @@ print('image_dim_ordering:', backend.image_dim_ordering())
 # Data file parameters
 models_path = '/data/models'
 data_path = '/data/data'
-dataset = 'npz_1mm_ks5_05p'
+dataset = 'npz_2mm_ks3_05p'
 in_sample_csv_path = '/data/data/stage1_labels.csv'
 
 # Training parameters
-input_size = (32, 32, 32)  # (48, 48, 48)
-nb_epoch = 2
-batch_size = 16
+input_size = (16, 16, 16)  # (48, 48, 48)
+nb_epoch = 20
+batch_size = 96
 chunk_size = 100
 optimizer = 'adam'
 
 # Define model
-cae3d = CAE3d(nb_filters_per_layer=(96, 128, 128), optimizer=optimizer)
+cae3d = CAE3d(nb_filters_per_layer=(64, 96, 128), optimizer=optimizer, batch_normalization=True)
 cae3d.compile()
 cae3d.model.summary()
 
@@ -45,7 +45,7 @@ validation_path = os.path.join(data_path, dataset, 'validation')
 nb_val_samples = 12000
 
 train_gen_factory = Generator3dCNN(train_path, labels_path=in_sample_csv_path,
-                                   random_rotation=False, random_offset_range=None)
+                                   random_rotation=True, random_offset_range=None)
 
 val_gen_factory = Generator3dCNN(validation_path, labels_path=in_sample_csv_path,
                                  random_rotation=False, random_offset_range=None)
@@ -66,9 +66,11 @@ checkpointer = ModelCheckpoint(filepath=os.path.join(out_path, weights_template)
 
 early_stopper = EarlyStopping(monitor='val_loss', min_delta=0, patience=10)
 
-csv_logger = CSVLogger(os.path.join(out_path, 'training_log.csv'))
+csv_logger = CSVLogger(os.path.join(out_path, 'epoch_log.csv'))
+batch_logger = BatchLossCSVLogger(os.path.join(out_path, 'batch_log.csv'))
 
 # Train model
 cae3d.model.fit_generator(generator=train_generator, samples_per_epoch=nb_train_samples, nb_epoch=nb_epoch,
                           validation_data=validation_generator, nb_val_samples=nb_val_samples,
-                          callbacks=[checkpointer, early_stopper, csv_logger], nb_worker=1, max_q_size=1)
+                          callbacks=[checkpointer, early_stopper, csv_logger, batch_logger],
+                          nb_worker=1, max_q_size=1)

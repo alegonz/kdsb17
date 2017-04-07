@@ -1,7 +1,10 @@
 import os
+import csv
+from collections import OrderedDict
 from itertools import product
 from glob import glob
 import numpy as np
+from keras.callbacks import Callback
 
 
 def read_labels(path, header=True):
@@ -21,7 +24,7 @@ def read_labels(path, header=True):
 
     lines = [tuple(line.rstrip().split(',')) for line in lines]
 
-    labels = {patient_id: float(label) for patient_id, label in lines}
+    labels = {patient_id: int(label) for patient_id, label in lines}
 
     return labels
 
@@ -80,6 +83,9 @@ def get_crop_idx(input_size, output_size):
 
 
 class RotationPatterns48:
+    """Class that creates a unique rotation of a 3D array, by combining face flips, turns and mirroring.
+    There are 48 unique rotations in total (6 faces x 4 turns x 2 mirrors)
+    """
     def __init__(self):
         # Rotations around the zy or zx planes.
         self.flips = [
@@ -115,7 +121,7 @@ class Generator3dCNN:
     """Data generator for 3D CNN.
     Args:
         data_path (str): path to npz files with array data.
-        labels_path (str): path to csv file with labels.
+        labels_path (None or str): path to csv file with labels.
         mean (float): Value for mean subtraction (scalar in HU units).
         rescale_map (tuple of tuple): HU values to normalized values, linear mapping pairs.
             Format: ((hu1, s1), (hu2, s2)) means that the mapping will be hu1 --> s1 and hu2 --> s2.
@@ -127,7 +133,7 @@ class Generator3dCNN:
          A generator instance.
     """
 
-    def __init__(self, data_path, labels_path,
+    def __init__(self, data_path, labels_path=None,
                  mean=-346.65, rescale_map=((-1000, -1), (400, 1)),
                  random_rotation=False, random_offset_range=None):
 
@@ -139,7 +145,11 @@ class Generator3dCNN:
         self.patients = sorted(glob(os.path.join(data_path, '*.npz')))
 
         self.labels_path = labels_path
-        self.labels = read_labels(labels_path, header=True)
+
+        if self.labels_path:
+            self.labels = read_labels(labels_path, header=True)
+        else:
+            self.labels = None
 
         self.mean = mean
         self.rescale_map = rescale_map
@@ -181,16 +191,36 @@ class Generator3dCNN:
 
         return x
 
-    def for_binary_classifier(self):
+    def _get_label_of(self, patient_id):
+        """
+        
+        Args:
+            patient_id (str): patient id.
+        Returns:
+            label (as numpy.array)
+        """
+        if self.labels:
+            label = self.labels[patient_id]
+            label = np.array([[label]])
+        else:
+            label = None
+        return label
+
+    def for_binary_classifier(self, array_type):
         """Data generator for binary classification model.
         Reads from file and feed into the model one sample at a time.
 
         Args:
-            None.
+            array_type (str): type of array to feed the model:
+                'array_lungs': full 3D array of patient lungs
+                'cae3d_features': 4D array of extracted features by 3d convolutional autoencoder
 
-        Returns:
-             A generator instance.
+        Yields:
+             A tuple (x, y) of data array and label.
         """
+
+        if array_type not in ['array_lungs', 'cae3d_features']:
+            raise ValueError('Invalid array_type. Must be either array_lungs or cae3d_features.')
 
         while 1:
 
@@ -199,27 +229,35 @@ class Generator3dCNN:
             for patient in self.patients:
                 # Input data
                 with np.load(patient) as data:
-                    x = data['array_lungs']
+                    x = data[array_type]
 
-                x = self._transform(x)
+                if array_type == 'array_lungs':
+                    x = self._transform(x)
 
                 # Output data
                 patient_id, __ = os.path.splitext(os.path.basename(patient))
-                label = self.labels[patient_id]
-                y = np.array([label])
+
+                y = self._get_label_of(patient_id)
 
                 yield (x, y)
 
-    def for_binary_classifier_chunked(self, chunk_size=100):
+    def for_binary_classifier_chunked(self, array_type, chunk_size=100):
         """Data generator for binary classification model.
         First uploads a chunk of samples into memory and then feeds those samples to the model one at time.
         
         Args:
+            array_type (str): type of array to feed the model:
+                'array_lungs': full 3D array of patient lungs
+                'cae3d_features': 4D array of extracted features by 3d convolutional autoencoder
             chunk_size (int): number of samples to keep in memory at a time.
             
-        Returns:
-             A generator instance.
+        Yields:
+             A tuple (x, y) of data array and label.
         """
+
+        if array_type not in ['array_lungs', 'cae3d_features']:
+            raise ValueError('Invalid array_type. Must be either array_lungs or cae3d_features.')
+
         nb_chunks = len(self.patients) // chunk_size
 
         sizes = [chunk_size]*nb_chunks
@@ -241,21 +279,68 @@ class Generator3dCNN:
 
                     # model input
                     with np.load(patient) as data:
-                        x = data['array_lungs']
+                        x = data[array_type]
 
-                    x = self._transform(x)
+                    if array_type == 'array_lungs':
+                        x = self._transform(x)
 
                     # model output
                     patient_id, __ = os.path.splitext(os.path.basename(patient))
-                    label = self.labels[patient_id]
-                    y = np.array([label])
+
+                    y = self._get_label_of(patient_id)
 
                     samples.append((x, y))
 
                 for x, y in samples:
                     yield (x, y)
 
+    def for_binary_classifier_full(self, array_type):
+        """Data generator for binary classification model.
+        First uploads all samples into memory and then feeds those samples to the model one at time.
+
+        Args:
+            array_type (str): type of array to feed the model:
+                'array_lungs': full 3D array of patient lungs
+                'cae3d_features': 4D array of extracted features by 3d convolutional autoencoder
+
+        Yields:
+             A tuple (x, y) of data array and label.
+        """
+
+        if array_type not in ['array_lungs', 'cae3d_features']:
+            raise ValueError('Invalid array_type. Must be either array_lungs or cae3d_features.')
+
+        samples = []
+        for patient in self.patients:
+            # model input
+            with np.load(patient) as data:
+                x = data[array_type]
+            if array_type == 'array_lungs':
+                x = self._transform(x)
+
+            # model output
+            patient_id, __ = os.path.splitext(os.path.basename(patient))
+            y = self._get_label_of(patient_id)
+
+            samples.append((x, y))
+
+        while 1:
+            np.random.shuffle(samples)
+            for sample in samples:
+                yield sample
+
     def for_autoencoder_chunked(self, input_size, batch_size=32, chunk_size=150):
+        """Data generator for 3d convolutional autoencoder.
+        First uploads a chunk of samples into memory and then feeds subarrays in batches to the model one at time.
+
+        Args:
+            input_size (tuple): size of input subarray in (z, y, x) order.
+            batch_size (int): batch size.
+            chunk_size (int): number of samples to keep in memory at a time.
+
+        Yields:
+             A tuple (x, x) of data subarrays.
+        """
 
         # Calculate chunk indices
         nb_chunks = len(self.patients) // chunk_size
@@ -310,3 +395,94 @@ class Generator3dCNN:
 
                     if (idx % batch_size) == 0:
                         yield (x, x)
+
+    def for_prediction(self, array_type):
+        """Data generator for binary classification model.
+        Reads from file and feed into the model one sample at a time.
+        This generator is finite, and its meant to be called in a for loop
+        using the model.predict function. DO NOT pass to fit_generator.
+        
+        Args:
+            array_type (str): type of array to feed the model:
+                'array_lungs': full 3D array of patient lungs
+                'cae3d_features': 4D array of extracted features by 3d convolutional autoencoder
+        Yields:
+             A tuple of (patient_id, x, y) of patient ID, data array and label.
+        """
+
+        if array_type not in ['array_lungs', 'cae3d_features']:
+            raise ValueError('Invalid array_type. Must be either array_lungs or cae3d_features.')
+
+        for patient in self.patients:
+
+            # Input data
+            with np.load(patient) as data:
+                x = data[array_type]
+
+            if array_type == 'array_lungs':
+                x = self._transform(x)
+
+            # Output data
+            patient_id, __ = os.path.splitext(os.path.basename(patient))
+
+            y = self._get_label_of(patient_id)
+
+            yield (patient_id, x, y)
+
+
+class BatchLossCSVLogger(Callback):
+    """Callback that streams the batch loss to a csv file.
+    # Example
+        ```python
+            csv_logger = BatchLossCSVLogger('training.log')
+            model.fit(X_train, Y_train, callbacks=[csv_logger])
+        ```
+    # Arguments
+        filename: filename of the csv file, e.g. 'run/log.csv'.
+        separator: string used to separate elements in the csv file.
+        append: True: append if file exists (useful for continuing
+            training). False: overwrite existing file,
+    """
+
+    def __init__(self, filename, separator=',', append=False):
+        self.sep = separator
+        self.filename = filename
+        self.csv_file = None
+        self.append = append
+        self.writer = None
+        self.append_header = True
+        self.epoch = 0
+        super(BatchLossCSVLogger, self).__init__()
+
+    def on_train_begin(self, logs=None):
+        if self.append:
+            if os.path.exists(self.filename):
+                with open(self.filename) as f:
+                    self.append_header = not bool(len(f.readline()))
+            self.csv_file = open(self.filename, 'a')
+        else:
+            self.csv_file = open(self.filename, 'w')
+
+    def on_batch_end(self, batch, logs=None):
+        logs = logs or {}
+
+        if not self.writer:
+            class CustomDialect(csv.excel):
+                delimiter = self.sep
+
+            self.writer = csv.DictWriter(self.csv_file,
+                                         fieldnames=['epoch', 'batch', 'loss'], dialect=CustomDialect)
+            if self.append_header:
+                self.writer.writeheader()
+
+        row_dict = OrderedDict({'epoch': self.epoch, 'batch': batch})
+        row_dict.update({'loss': logs['loss']})
+        self.writer.writerow(row_dict)
+        self.csv_file.flush()
+
+    def on_epoch_end(self, epoch, logs=None):
+        self.epoch += 1
+
+    def on_train_end(self, logs=None):
+        self.csv_file.close()
+        self.writer = None
