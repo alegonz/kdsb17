@@ -12,12 +12,11 @@ from kdsb17.fileutils import makedir
 def predict_autoencoder3d(model_name=None, dataset=None):
     """
     Args:
-        model_name (None or str)
-        dataset (None or str)
+        model_name (None or str): Path to model file relative to models folder.
+            e.g. '20170407_174348/weights.17-0.432386.hdf5'
+        dataset (None or str): Path to dataset folder relative to data folder.
+            e.g. 'npz_2mm_ks3_05p/train'
     """
-
-    # model_name = '20170407_174348/weights.17-0.432386.hdf5'
-    # dataset = 'npz_2mm_ks3_05p/train'
 
     if (model_name is None) and (dataset is None):
         try:

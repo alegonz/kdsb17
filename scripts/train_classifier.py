@@ -44,12 +44,10 @@ model.summary()
 train_path = os.path.join(data_path, dataset, 'train')
 datagen_train = Generator3dCNN(train_path, labels_path=in_sample_csv_path)
 nb_train_samples = len(datagen_train.patients)
-# nb_train_samples = 5
 
 validation_path = os.path.join(data_path, dataset, 'validation')
 datagen_val = Generator3dCNN(validation_path, labels_path=in_sample_csv_path)
 nb_val_samples = len(datagen_val.patients)
-# nb_val_samples = 5
 
 train_generator = datagen_train.for_binary_classifier_full(array_type='cae3d_features')
 val_generator = datagen_val.for_binary_classifier_full(array_type='cae3d_features')

@@ -1,3 +1,13 @@
+##### Code of first attempt at Kaggle Data Science Bowl 2017
+Detailed description pending.
+
+The first attempt consists of a 3-layer 3D convolutional autoencoder to extract high-level features of lung scans (3D arrays of CT scans in Hounsfield Units), and then learn a multi-layer perceptron upon those features for binary classification.
+
+* **kdsb17**: \
+  Contains the custom modules for data pre-processing, and building and training the models.
+* **scripts**: \
+  Contains the scripts to preprocess the data, train the models and predict.
+
 ##### Requirements
 * Python 3
 * Keras 1.2.2

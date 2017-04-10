@@ -13,12 +13,11 @@ from kdsb17.layers import SpatialPyramidPooling3D
 def predict_classifier(model_name=None, dataset=None):
     """
     Args:
-        model_name (None or str)
-        dataset (None or str)
+        model_name (None or str): Path to model file relative to models folder.
+            e.g. '20170407_231214/weights.03-0.57.hdf5'
+        dataset (None or str): Path to dataset folder relative to data folder.
+            e.g. 'npz_2mm_ks3_05p/test'
     """
-
-    # model_name = '20170407_231214/weights.03-0.57.hdf5'
-    # dataset = 'npz_2mm_ks3_05p/test'
 
     if (model_name is None) and (dataset is None):
         try:

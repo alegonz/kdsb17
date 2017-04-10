@@ -22,7 +22,7 @@ dataset = 'npz_2mm_ks3_05p'
 in_sample_csv_path = '/data/data/stage1_labels.csv'
 
 # Training parameters
-input_size = (16, 16, 16)  # (48, 48, 48)
+input_size = (16, 16, 16)
 nb_epoch = 20
 batch_size = 96
 chunk_size = 100
@@ -35,13 +35,9 @@ cae3d.model.summary()
 
 # Create data generators
 train_path = os.path.join(data_path, dataset, 'train')
-# nb_train_samples = (490930//batch_size) * batch_size  # Closest multiple of batch size to 490,930 for size 32
-# nb_train_samples = (149538//batch_size) * batch_size  # Closest multiple of batch size to 149,538 for size 48
 nb_train_samples = 50000
 
 validation_path = os.path.join(data_path, dataset, 'validation')
-# nb_val_samples = (122952//batch_size) * batch_size  # Closest multiple of batch size to 122,952
-# nb_val_samples = (37385//batch_size) * batch_size  # Closest multiple of batch size to 37,385
 nb_val_samples = 12000
 
 train_gen_factory = Generator3dCNN(train_path, labels_path=in_sample_csv_path,
