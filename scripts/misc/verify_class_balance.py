@@ -4,7 +4,7 @@ from glob import glob
 
 sys.path.append('/data/code/')
 
-from kdsb17.trainutils import read_labels
+from kdsb17.utils.datagen import read_labels
 
 data_path = '/data/data'
 dataset = 'npz_2mm_ks3_05p'

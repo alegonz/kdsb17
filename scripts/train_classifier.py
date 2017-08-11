@@ -12,8 +12,8 @@ from keras.models import Model
 from keras.callbacks import ModelCheckpoint, EarlyStopping, CSVLogger
 
 from kdsb17.layers import SpatialPyramidPooling3D
-from kdsb17.trainutils import Generator3dCNN, BatchLossCSVLogger
-from kdsb17.fileutils import makedir
+from kdsb17.utils.datagen import Generator3dCNN, BatchLossCSVLogger
+from kdsb17.utils.file import makedir
 
 print('image_dim_ordering:', backend.image_dim_ordering())
 

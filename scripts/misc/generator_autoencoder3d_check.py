@@ -1,11 +1,12 @@
 import os
 import sys
+
 import numpy as np
+
 np.random.seed(1988)
 
 sys.path.append('/data/code/')
-from kdsb17.trainutils import Generator3dCNN
-from kdsb17.plotutils import show_slices
+from kdsb17.utils.datagen import Generator3dCNN
 
 data_path = '/data/data'
 dataset = 'npz_2mm_ks3_05p'

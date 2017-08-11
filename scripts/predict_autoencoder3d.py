@@ -5,8 +5,8 @@ sys.path.append('/data/code/')
 import numpy as np
 
 from keras.models import Model, load_model
-from kdsb17.trainutils import Generator3dCNN
-from kdsb17.fileutils import makedir
+from kdsb17.utils.datagen import Generator3dCNN
+from kdsb17.utils.file import makedir
 
 
 def predict_autoencoder3d(model_name=None, dataset=None):

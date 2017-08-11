@@ -1,11 +1,11 @@
 import os
-import sys
 import random
+import sys
 
 sys.path.append('/data/code/')
 
-from kdsb17.trainutils import read_labels
-from kdsb17.fileutils import makedir, make_symlinks
+from kdsb17.utils.datagen import read_labels
+from kdsb17.utils.file import makedir, make_symlinks
 
 data_path = '/data/data/'
 dataset = 'npz_1mm_ks5_05p'

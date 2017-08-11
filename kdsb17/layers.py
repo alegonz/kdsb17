@@ -31,6 +31,7 @@ class SpatialPyramidPooling3D(Layer):
 
         self.dim_ordering = K.image_dim_ordering()
         self.nb_bins_per_level = nb_bins_per_level
+        self.nb_channels = None
 
         super(SpatialPyramidPooling3D, self).__init__(**kwargs)
 

@@ -9,9 +9,9 @@ np.random.seed(1702)
 from keras import backend
 from keras.callbacks import ModelCheckpoint, EarlyStopping, CSVLogger
 
-from kdsb17.cae3d import CAE3d
-from kdsb17.trainutils import Generator3dCNN, BatchLossCSVLogger
-from kdsb17.fileutils import makedir
+from kdsb17.model import LungNet
+from kdsb17.utils.datagen import Generator3dCNN, BatchLossCSVLogger
+from kdsb17.utils.file import makedir
 
 print('image_dim_ordering:', backend.image_dim_ordering())
 
@@ -29,8 +29,8 @@ chunk_size = 100
 optimizer = 'adam'
 
 # Define model
-cae3d = CAE3d(nb_filters_per_layer=(64, 96, 128), optimizer=optimizer, batch_normalization=True)
-cae3d.compile()
+cae3d = LungNet(nb_filters_per_layer=(64, 96, 128), optimizer=optimizer, batch_normalization=True)
+cae3d.build_models()
 cae3d.model.summary()
 
 # Create data generators

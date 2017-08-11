@@ -9,7 +9,7 @@ from kdsb17.preprocessing import (
     read_dcm_sequence, check_sequence, make_3d_array, resample, make_lungs_mask, extract_lungs
     )
 
-from kdsb17.plotutils import show_slices
+from kdsb17.utils.plot import show_slices
 
 base_path = '/data/data/stage1/'
 out_path = '/data/analysis/temp/'

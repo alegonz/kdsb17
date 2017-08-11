@@ -1,12 +1,12 @@
+import csv
 import os
 import sys
-import csv
 from collections import OrderedDict
 
 sys.path.append('/data/code/')
 from keras.models import load_model
-from kdsb17.trainutils import Generator3dCNN
-from kdsb17.fileutils import makedir
+from kdsb17.utils.datagen import Generator3dCNN
+from kdsb17.utils.file import makedir
 from kdsb17.layers import SpatialPyramidPooling3D
 
 
