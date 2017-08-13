@@ -5,7 +5,7 @@ from collections import OrderedDict
 
 sys.path.append('/data/code/')
 from keras.models import load_model
-from kdsb17.utils.datagen import Generator3dCNN
+from kdsb17.utils.datagen import GeneratorFactory
 from kdsb17.utils.file import makedir
 from kdsb17.layers import SpatialPyramidPooling3D
 
@@ -46,7 +46,7 @@ def predict_classifier(model_name=None, dataset=None):
                        custom_objects={'SpatialPyramidPooling3D': SpatialPyramidPooling3D([1, 2, 4])})
 
     # Make generator for prediction
-    data_gen = Generator3dCNN(data_path=data_path, labels_path=None)
+    data_gen = GeneratorFactory(data_path=data_path, labels_path=None)
     generator = data_gen.for_prediction(array_type='cae3d_features')
 
     try:

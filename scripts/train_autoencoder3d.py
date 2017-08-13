@@ -10,7 +10,7 @@ from keras import backend
 from keras.callbacks import ModelCheckpoint, EarlyStopping, CSVLogger
 
 from kdsb17.model import LungNet
-from kdsb17.utils.datagen import Generator3dCNN, BatchLossCSVLogger
+from kdsb17.utils.datagen import GeneratorFactory, BatchLossCSVLogger
 from kdsb17.utils.file import makedir
 
 print('image_dim_ordering:', backend.image_dim_ordering())
@@ -40,11 +40,11 @@ nb_train_samples = 50000
 validation_path = os.path.join(data_path, dataset, 'validation')
 nb_val_samples = 12000
 
-train_gen_factory = Generator3dCNN(train_path, labels_path=in_sample_csv_path,
-                                   random_rotation=True, random_offset_range=None)
+train_gen_factory = GeneratorFactory(train_path, labels_path=in_sample_csv_path,
+                                     random_rotation=True, random_offset_range=None)
 
-val_gen_factory = Generator3dCNN(validation_path, labels_path=in_sample_csv_path,
-                                 random_rotation=False, random_offset_range=None)
+val_gen_factory = GeneratorFactory(validation_path, labels_path=in_sample_csv_path,
+                                   random_rotation=False, random_offset_range=None)
 
 train_generator = train_gen_factory.for_autoencoder_chunked(input_size=input_size,
                                                             batch_size=batch_size, chunk_size=chunk_size)

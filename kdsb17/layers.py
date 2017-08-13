@@ -49,7 +49,7 @@ class SpatialPyramidPooling3D(Layer):
         base_config = super(SpatialPyramidPooling3D, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-    def get_output_shape_for(self, input_shape):
+    def compute_output_shape(self, input_shape):
 
         nb_samples = input_shape[0]
         nb_outputs_per_channel = sum([nb_bins ** 3 for nb_bins in self.nb_bins_per_level])
@@ -59,21 +59,26 @@ class SpatialPyramidPooling3D(Layer):
 
     def call(self, x, mask=None):
 
+        input_shape = K.shape(x)
+
         if self.dim_ordering == 'th':
-            __, __, len_i, len_j, len_k = x.shape
+            len_i, len_j, len_k = input_shape[2], input_shape[3], input_shape[4]
         elif self.dim_ordering == 'tf':
-            __, len_i, len_j, len_k, __ = x.shape
+            len_i, len_j, len_k = input_shape[1], input_shape[2], input_shape[3]
 
         outputs = []
 
         for nb_bins in self.nb_bins_per_level:
-            bin_size_i, bin_size_j, bin_size_k = (len_i // nb_bins, len_j // nb_bins, len_k // nb_bins)
+            bin_size_i = K.cast(len_i, 'int32') // nb_bins
+            bin_size_j = K.cast(len_j, 'int32') // nb_bins
+            bin_size_k = K.cast(len_k, 'int32') // nb_bins
 
             for i, j, k in product(range(nb_bins), range(nb_bins), range(nb_bins)):
                 # each combination of i,j,k is a unique box upon which pooling is performed
-                i1, i2 = i * bin_size_i, (i + 1) * bin_size_i
-                j1, j2 = j * bin_size_j, (j + 1) * bin_size_j
-                k1, k2 = k * bin_size_k, (k + 1) * bin_size_k
+                # the * operand works if Dimension*int, but not if int*Dimension. __rmul__ is not implemented.
+                i1, i2 = bin_size_i * i, bin_size_i * (i + 1)
+                j1, j2 = bin_size_j * j, bin_size_j * (j + 1)
+                k1, k2 = bin_size_k * k, bin_size_k * (k + 1)
 
                 if self.dim_ordering == 'th':
                     pooled_features = K.max(x[:, :, i1:i2, j1:j2, k1:k2], axis=(2, 3, 4))

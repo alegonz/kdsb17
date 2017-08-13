@@ -5,7 +5,7 @@ sys.path.append('/data/code/')
 import numpy as np
 
 from keras.models import Model, load_model
-from kdsb17.utils.datagen import Generator3dCNN
+from kdsb17.utils.datagen import GeneratorFactory
 from kdsb17.utils.file import makedir
 
 
@@ -41,7 +41,7 @@ def predict_autoencoder3d(model_name=None, dataset=None):
                                output=cae3d_model.get_layer(layer_name).output)
 
     # Make generator for prediction
-    data_gen = Generator3dCNN(data_path=os.path.join(data_path, dataset), labels_path=None)
+    data_gen = GeneratorFactory(data_path=os.path.join(data_path, dataset), labels_path=None)
     generator = data_gen.for_prediction(array_type='array_lungs')
 
     for patient_id, x, _ in generator:

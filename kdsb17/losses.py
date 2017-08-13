@@ -27,7 +27,7 @@ def gmd_log_likelihood(y_true, y_pred):
             The second dimension encodes the K priors, K means and K standard deviations of each gaussian.
 
     Returns:
-        Average negative log-likelihood across samples.
+        Average negative log-likelihood of each sample.
     """
     # Get GMD parameters
     # Assume parameters are concatenated along the last axis
@@ -35,7 +35,7 @@ def gmd_log_likelihood(y_true, y_pred):
 
     # Compute negative log-likelihood
     z = _tf_gaussian(y_true, mu, sigma) * priors
-    z = K.sum(z, axis=4, keep_dims=True)
+    z = K.sum(z, axis=4)
     z = -K.log(z)
 
-    return K.mean(z)
+    return K.mean(z, axis=(1, 2, 3))

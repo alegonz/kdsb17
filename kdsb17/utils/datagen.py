@@ -1,6 +1,5 @@
 import os
 from itertools import product
-from glob import glob
 import numpy as np
 
 
@@ -54,31 +53,6 @@ def rotate3d(x, pattern):
     return xr
 
 
-def get_crop_idx(input_size, output_size):
-    """Get the crop sizes necessary to match the CAE output image size.
-
-    Args:
-        input_size  (tuple): input array size (z, y, x)
-        output_size (tuple): output array size (z, y, x)
-    Returns:
-        crop indexes along each dimension (tuple): ((dim1_1, dim1_2), (dim2_1, dim2_2), ..., (dimN_1, dimN_2))
-    """
-
-    if any([i < o for i, o in zip(input_size, output_size)]):
-        raise ValueError('The output size must be less than or equal to the input size.')
-
-    idx = []
-
-    for dim_in, dim_out in zip(input_size, output_size):
-        diff = dim_in - dim_out
-        idx1 = diff // 2
-        idx2 = dim_in - (diff // 2 + diff % 2)
-
-        idx.extend([(idx1, idx2)])
-
-    return tuple(idx)
-
-
 class RotationPatterns48:
     """Class that creates a unique rotation of a 3D array, by combining face flips, turns and mirroring.
     There are 48 unique rotations in total (6 faces x 4 turns x 2 mirrors)
@@ -114,12 +88,9 @@ class RotationPatterns48:
         return self.flips[flip], self.turns[turn], self.mirrors[mirror]
 
 
-class Generator3dCNN:
-    """Data generator for 3D CNN.
+class GeneratorFactory:
+    """Data generator for model.
     Args:
-        data_path (str): path to npz files with array data.
-        labels_path (None or str): path to csv file with labels.
-        mean (float): Value for mean subtraction (scalar in HU units).
         rescale_map (tuple of tuple): HU values to normalized values, linear mapping pairs.
             Format: ((hu1, s1), (hu2, s2)) means that the mapping will be hu1 --> s1 and hu2 --> s2.
         random_rotation (bool): Rotate randomly arrays for data augmentation.
@@ -130,25 +101,13 @@ class Generator3dCNN:
          A generator instance.
     """
 
-    def __init__(self, data_path, labels_path=None,
-                 mean=-346.65, rescale_map=((-1000, -1), (400, 1)),
+    def __init__(self, rescale_map=((-1000, -1), (400, 1)),
                  random_rotation=False, random_offset_range=None):
 
         (hu1, s1), (hu2, s2) = rescale_map
         if (hu2 - hu1) == 0:
             raise ValueError('Invalid rescale mapping.')
 
-        self.data_path = data_path
-        self.patients = sorted(glob(os.path.join(data_path, '*.npz')))
-
-        self.labels_path = labels_path
-
-        if self.labels_path:
-            self.labels = read_labels(labels_path, header=True)
-        else:
-            self.labels = None
-
-        self.mean = mean
         self.rescale_map = rescale_map
         self.random_rotation = random_rotation
         self.rotation_patterns = RotationPatterns48()
@@ -161,7 +120,6 @@ class Generator3dCNN:
         - Random offset addition
         - Mean subtraction
         - Rescaling
-        - Change dimension to Theano format.
         """
 
         x = x.astype('float32')
@@ -181,156 +139,53 @@ class Generator3dCNN:
         m = (s2 - s1) / (hu2 - hu1)
         x = m * (x - hu1) + s1
 
-        # Mean subtraction
-        x -= (m * (self.mean - hu1) + s1)
-
-        x = np.expand_dims(np.expand_dims(x, 0), 0)  # Add batch and channels dimensions (Theano format)
+        x = np.expand_dims(np.expand_dims(x, 0), 4)  # Add batch and channels dimensions (Tensorflow format)
 
         return x
 
-    def _get_label_of(self, patient_id):
-        """
-        
-        Args:
-            patient_id (str): patient id.
-        Returns:
-            label (as numpy.array)
-        """
-        if self.labels:
-            label = self.labels[patient_id]
-            label = np.array([[label]])
-        else:
-            label = None
-        return label
-
-    def for_binary_classifier(self, array_type):
+    def build_classifier_generator(self, data_paths, labels_path):
         """Data generator for binary classification model.
         Reads from file and feed into the model one sample at a time.
 
         Args:
-            array_type (str): type of array to feed the model:
-                'array_lungs': full 3D array of patient lungs
-                'cae3d_features': 4D array of extracted features by 3d convolutional autoencoder
-
+            data_paths (str): path to npz files with array data.
+            labels_path (str): path to csv file with labels.
         Yields:
              A tuple (x, y) of data array and label.
         """
 
-        if array_type not in ['array_lungs', 'cae3d_features']:
-            raise ValueError('Invalid array_type. Must be either array_lungs or cae3d_features.')
+        if len(data_paths) == 0:
+            raise ValueError('data_paths cannot be an empty list.')
+
+        labels = read_labels(labels_path, header=True)
 
         while 1:
 
-            np.random.shuffle(self.patients)
+            np.random.shuffle(data_paths)
 
-            for patient in self.patients:
+            for path in data_paths:
                 # Input data
-                with np.load(patient) as data:
-                    x = data[array_type]
+                with np.load(path) as data:
+                    x = data['array_lungs']
 
-                if array_type == 'array_lungs':
-                    x = self._transform(x)
+                x = self._transform(x)
 
                 # Output data
-                patient_id, __ = os.path.splitext(os.path.basename(patient))
+                patient_id, __ = os.path.splitext(os.path.basename(path))
 
-                y = self._get_label_of(patient_id)
+                y = labels.get(patient_id)
+                if y is None:
+                    raise ValueError('Unknown label for patient %s.' % patient_id)
+                y = np.array([[y]], dtype='float32')
 
                 yield (x, y)
 
-    def for_binary_classifier_chunked(self, array_type, chunk_size=100):
-        """Data generator for binary classification model.
-        First uploads a chunk of samples into memory and then feeds those samples to the model one at time.
-        
-        Args:
-            array_type (str): type of array to feed the model:
-                'array_lungs': full 3D array of patient lungs
-                'cae3d_features': 4D array of extracted features by 3d convolutional autoencoder
-            chunk_size (int): number of samples to keep in memory at a time.
-            
-        Yields:
-             A tuple (x, y) of data array and label.
-        """
-
-        if array_type not in ['array_lungs', 'cae3d_features']:
-            raise ValueError('Invalid array_type. Must be either array_lungs or cae3d_features.')
-
-        nb_chunks = len(self.patients) // chunk_size
-
-        sizes = [chunk_size]*nb_chunks
-        if len(self.patients) % chunk_size != 0:
-            sizes.append(len(self.patients) % chunk_size)  # the last chunk will have less samples
-
-        while 1:
-
-            np.random.shuffle(self.patients)
-
-            for chunk, size in enumerate(sizes):
-
-                # Load chunk into memory
-                n1 = chunk*chunk_size
-                n2 = chunk*chunk_size + size
-
-                samples = []
-                for patient in self.patients[n1:n2]:
-
-                    # model input
-                    with np.load(patient) as data:
-                        x = data[array_type]
-
-                    if array_type == 'array_lungs':
-                        x = self._transform(x)
-
-                    # model output
-                    patient_id, __ = os.path.splitext(os.path.basename(patient))
-
-                    y = self._get_label_of(patient_id)
-
-                    samples.append((x, y))
-
-                for x, y in samples:
-                    yield (x, y)
-
-    def for_binary_classifier_full(self, array_type):
-        """Data generator for binary classification model.
-        First uploads all samples into memory and then feeds those samples to the model one at time.
-
-        Args:
-            array_type (str): type of array to feed the model:
-                'array_lungs': full 3D array of patient lungs
-                'cae3d_features': 4D array of extracted features by 3d convolutional autoencoder
-
-        Yields:
-             A tuple (x, y) of data array and label.
-        """
-
-        if array_type not in ['array_lungs', 'cae3d_features']:
-            raise ValueError('Invalid array_type. Must be either array_lungs or cae3d_features.')
-
-        samples = []
-        for patient in self.patients:
-            # model input
-            with np.load(patient) as data:
-                x = data[array_type]
-            if array_type == 'array_lungs':
-                x = self._transform(x)
-
-            # model output
-            patient_id, __ = os.path.splitext(os.path.basename(patient))
-            y = self._get_label_of(patient_id)
-
-            samples.append((x, y))
-
-        while 1:
-            np.random.shuffle(samples)
-            for sample in samples:
-                yield sample
-
-    def for_autoencoder_chunked(self, input_size, batch_size=32, chunk_size=150):
+    def build_autoencoder_generator(self, data_paths, input_size, batch_size=32, chunk_size=150):
         """Data generator for 3d convolutional autoencoder.
         First uploads a chunk of samples into memory and then feeds subarrays in batches to the model one at time.
 
         Args:
+            data_paths (str): path to npz files with array data.
             input_size (tuple): size of input subarray in (z, y, x) order.
             batch_size (int): batch size.
             chunk_size (int): number of samples to keep in memory at a time.
@@ -339,8 +194,13 @@ class Generator3dCNN:
              A tuple (x, x) of data subarrays.
         """
 
+        if len(data_paths) == 0:
+            raise ValueError('data_paths cannot be an empty list.')
+
+        n_samples = len(data_paths)
+
         # Calculate chunk indices
-        nb_chunks = len(self.patients) // chunk_size
+        nb_chunks = n_samples // chunk_size
 
         chunks = []
         for chunk in range(nb_chunks):
@@ -348,21 +208,21 @@ class Generator3dCNN:
             n2 = chunk_size * (chunk + 1)
             chunks.append((n1, n2))
 
-        if len(self.patients) % chunk_size != 0:
+        if n_samples % chunk_size != 0:
             n1 = chunk_size * nb_chunks
-            n2 = n1 + len(self.patients) % chunk_size
+            n2 = n1 + n_samples % chunk_size
             chunks.append((n1, n2))  # the last chunk will have less patients
 
         # Generator's endless loop starts here
         while 1:
-            np.random.shuffle(self.patients)
+            np.random.shuffle(data_paths)
 
             for n1, n2 in chunks:
 
                 # Load chunk of patient arrays into memory
                 arrays = []
-                for patient in self.patients[n1:n2]:
-                    with np.load(patient) as data:
+                for path in data_paths[n1:n2]:
+                    with np.load(path) as data:
                         x = data['array_lungs']
                     arrays.append(x)
 
@@ -383,7 +243,7 @@ class Generator3dCNN:
                 np.random.shuffle(samples)
 
                 # Yield batches
-                x = np.zeros((batch_size, 1, input_size[0], input_size[1], input_size[2]), dtype='float32')
+                x = np.zeros((batch_size, input_size[0], input_size[1], input_size[2], 1), dtype='float32')
 
                 idx = 0
                 for sample in samples:
@@ -392,36 +252,3 @@ class Generator3dCNN:
 
                     if (idx % batch_size) == 0:
                         yield (x, x)
-
-    def for_prediction(self, array_type):
-        """Data generator for binary classification model.
-        Reads from file and feed into the model one sample at a time.
-        This generator is finite, and its meant to be called in a for loop
-        using the model.predict function. DO NOT pass to fit_generator.
-        
-        Args:
-            array_type (str): type of array to feed the model:
-                'array_lungs': full 3D array of patient lungs
-                'cae3d_features': 4D array of extracted features by 3d convolutional autoencoder
-        Yields:
-             A tuple of (patient_id, x, y) of patient ID, data array and label.
-        """
-
-        if array_type not in ['array_lungs', 'cae3d_features']:
-            raise ValueError('Invalid array_type. Must be either array_lungs or cae3d_features.')
-
-        for patient in self.patients:
-
-            # Input data
-            with np.load(patient) as data:
-                x = data[array_type]
-
-            if array_type == 'array_lungs':
-                x = self._transform(x)
-
-            # Output data
-            patient_id, __ = os.path.splitext(os.path.basename(patient))
-
-            y = self._get_label_of(patient_id)
-
-            yield (patient_id, x, y)

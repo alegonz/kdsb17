@@ -12,7 +12,7 @@ from keras.models import Model
 from keras.callbacks import ModelCheckpoint, EarlyStopping, CSVLogger
 
 from kdsb17.layers import SpatialPyramidPooling3D
-from kdsb17.utils.datagen import Generator3dCNN, BatchLossCSVLogger
+from kdsb17.utils.datagen import GeneratorFactory, BatchLossCSVLogger
 from kdsb17.utils.file import makedir
 
 print('image_dim_ordering:', backend.image_dim_ordering())
@@ -42,11 +42,11 @@ model.summary()
 
 # Create data generators
 train_path = os.path.join(data_path, dataset, 'train')
-datagen_train = Generator3dCNN(train_path, labels_path=in_sample_csv_path)
+datagen_train = GeneratorFactory(train_path, labels_path=in_sample_csv_path)
 nb_train_samples = len(datagen_train.patients)
 
 validation_path = os.path.join(data_path, dataset, 'validation')
-datagen_val = Generator3dCNN(validation_path, labels_path=in_sample_csv_path)
+datagen_val = GeneratorFactory(validation_path, labels_path=in_sample_csv_path)
 nb_val_samples = len(datagen_val.patients)
 
 train_generator = datagen_train.for_binary_classifier_full(array_type='cae3d_features')
