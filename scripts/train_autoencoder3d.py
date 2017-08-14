@@ -1,72 +1,49 @@
+#!/usr/bin/env python3
+
 import os
-import sys
 import time
-sys.path.append('/data/code/')
-
-import numpy as np
-np.random.seed(1702)
-
-from keras import backend
-from keras.callbacks import ModelCheckpoint, EarlyStopping, CSVLogger
 
 from kdsb17.model import LungNet
-from kdsb17.utils.datagen import GeneratorFactory, BatchLossCSVLogger
-from kdsb17.utils.file import makedir
+from kdsb17.utils.datagen import GeneratorFactory
 
-print('image_dim_ordering:', backend.image_dim_ordering())
 
-# Data file parameters
-models_path = '/data/models'
-data_path = '/data/data'
-dataset = 'npz_2mm_ks3_05p'
-in_sample_csv_path = '/data/data/stage1_labels.csv'
+def main(argv=None):
 
-# Training parameters
-input_size = (16, 16, 16)
-nb_epoch = 20
-batch_size = 96
-chunk_size = 100
-optimizer = 'adam'
+    # Data file parameters
+    checkpoints_path = '/root/share/personal/data/kdsb17/analysis/checkpoints/'
+    dataset_path = '/root/share/personal/data/kdsb17/analysis/datasets/npz_spacing1x1x1_kernel5_drop0.5p/'
 
-# Define model
-cae3d = LungNet(nb_filters_per_layer=(64, 96, 128), optimizer=optimizer, batch_normalization=True)
-cae3d.build_models()
-cae3d.model.summary()
+    # Training parameters
+    input_size = (32, 32, 32)
+    batch_size = 32
+    steps_per_epoch = 250
+    epochs = 20
+    validation_steps = 100
+    chunk_size = 100
+    optimizer = 'adam'
 
-# Create data generators
-train_path = os.path.join(data_path, dataset, 'train')
-nb_train_samples = 50000
+    # Define model
+    time_string = time.strftime('%Y%m%d_%H%M%S')
+    model_path = os.path.join(checkpoints_path, time_string)  # dir for model files and log
 
-validation_path = os.path.join(data_path, dataset, 'validation')
-nb_val_samples = 12000
+    lungnet = LungNet(nb_filters_per_layer=(64, 96, 128), n_gaussians=2,
+                      optimizer=optimizer, batch_normalization=False,
+                      model_path=model_path)
+    lungnet.build_submodel('cae3d')
 
-train_gen_factory = GeneratorFactory(train_path, labels_path=in_sample_csv_path,
-                                     random_rotation=True, random_offset_range=None)
+    # Create data generators
+    train_gen_factory = GeneratorFactory(random_rotation=True, random_offset_range=None)
+    val_gen_factory = GeneratorFactory(random_rotation=False, random_offset_range=None)
 
-val_gen_factory = GeneratorFactory(validation_path, labels_path=in_sample_csv_path,
-                                   random_rotation=False, random_offset_range=None)
+    train_gen = train_gen_factory.build_cae3d_generator(dataset_path, 'train', input_size=input_size,
+                                                        batch_size=batch_size, chunk_size=chunk_size)
 
-train_generator = train_gen_factory.for_autoencoder_chunked(input_size=input_size,
-                                                            batch_size=batch_size, chunk_size=chunk_size)
+    val_gen = val_gen_factory.build_cae3d_generator(dataset_path, 'validation', input_size=input_size,
+                                                    batch_size=batch_size, chunk_size=chunk_size)
 
-validation_generator = val_gen_factory.for_autoencoder_chunked(input_size=input_size,
-                                                               batch_size=batch_size, chunk_size=chunk_size)
+    # Train model
+    lungnet.fit_submodel('cae3d', train_generator=train_gen, steps_per_epoch=steps_per_epoch, epochs=epochs,
+                         validation_generator=val_gen, validation_steps=validation_steps)
 
-# Create callbacks
-time_string = time.strftime('%Y%m%d_%H%M%S')
-out_path = makedir(os.path.join(models_path, 'autoencoder3d', time_string))  # dir for model files and log
-weights_template = 'weights.{epoch:02d}-{val_loss:.6f}.hdf5'
-
-checkpointer = ModelCheckpoint(filepath=os.path.join(out_path, weights_template),
-                               monitor='val_loss', save_best_only=True)
-
-early_stopper = EarlyStopping(monitor='val_loss', min_delta=0, patience=10)
-
-csv_logger = CSVLogger(os.path.join(out_path, 'epoch_log.csv'))
-batch_logger = BatchLossCSVLogger(os.path.join(out_path, 'batch_log.csv'))
-
-# Train model
-cae3d.model.fit_generator(generator=train_generator, samples_per_epoch=nb_train_samples, nb_epoch=nb_epoch,
-                          validation_data=validation_generator, nb_val_samples=nb_val_samples,
-                          callbacks=[checkpointer, early_stopper, csv_logger, batch_logger],
-                          nb_worker=1, max_q_size=1)
+if __name__ == '__main__':
+    main()

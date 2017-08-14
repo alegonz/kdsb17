@@ -14,7 +14,7 @@ def read_dcm_sequence(patientid, base_path):
     
     Args:
         patientid (str): ID of the patient (patient foldername).
-        base_path (str): Path containing the patient folders.
+        base_path (str): Path containing the patient folder.
     
     Returns:
         A list of dicom slice data.
@@ -316,7 +316,7 @@ def extract_lungs(array, mask, slice_drop_prob=None):
     Args:
         array (numpy.array): 3D array of stacked slices.
         mask (numpy.array): 3D binary array indicating the lung (1) and background voxels (0).
-        slice_drop_prob (None or tuple): Cumulative volume percentage along z-dimension to drop from volume tails.
+        slice_drop_prob (None or float32): Cumulative volume percentage along z-dimension to drop from volume tails.
     Returns:
         Sub-array with lungs.
     """
@@ -326,8 +326,8 @@ def extract_lungs(array, mask, slice_drop_prob=None):
         slice_volume = mask.sum(axis=(1, 2))
         total_volume = mask.sum()
         
-        idx1 = np.cumsum(slice_volume/total_volume) < slice_drop_prob[0]
-        idx2 = np.cumsum(slice_volume/total_volume) > (1 - slice_drop_prob[1])
+        idx1 = np.cumsum(slice_volume/total_volume) < slice_drop_prob
+        idx2 = np.cumsum(slice_volume/total_volume) > (1 - slice_drop_prob)
         
         kill = np.logical_or(idx1, idx2)
         mask[kill] = 0

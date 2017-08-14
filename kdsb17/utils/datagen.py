@@ -1,56 +1,12 @@
 import os
+from glob import glob
 from itertools import product
+
 import numpy as np
 
+from kdsb17.utils.file import read_labels
 
-def read_labels(path, header=True):
-    """Makes dictionary of patient_id:labels from csv file.
-    Args:
-        path: path to csv file containing the patient_id labels.
-        header (bool): csv file has a header (True) or not (False).
-    
-    Returns:
-         Dictionary of patient_id:label.
-    """
-    with open(path, 'r') as f:
-        lines = f.readlines()
-
-    if header:
-        lines.pop(0)
-
-    lines = [tuple(line.rstrip().split(',')) for line in lines]
-
-    labels = {patient_id: int(label) for patient_id, label in lines}
-
-    return labels
-
-
-def rotate3d(x, pattern):
-    """Random rotation of a 3D array.
-    48 unique rotations = 6 (sides) x 4 (rotations of each side) x 2 (original and mirror).
-
-    Args:
-        x (numpy.array): 3D array to be rotated
-        pattern (tuple): an element of a RotationPatterns48 instance
-
-    Returns:
-        Randomly rotated array
-    """
-    # Convention: dim0 = z, dim1 = y, dim2=x
-    if x.ndim != 3:
-        raise ValueError('Array must be 3D. Got %d dimensions.' % x.ndim)
-
-    (axes1, k1), (axes2, k2), mirror = pattern
-
-    # Get the specified face front
-    xr = np.rot90(x, k=k1, axes=axes1)
-    # Turn that face
-    xr = np.rot90(xr, k=k2, axes=axes2)
-    # Mirror the array randomly
-    if mirror:
-        xr = np.fliplr(xr)
-
-    return xr
+EPSILON = 1e-6
 
 
 class RotationPatterns48:
@@ -87,6 +43,33 @@ class RotationPatterns48:
 
         return self.flips[flip], self.turns[turn], self.mirrors[mirror]
 
+    def rotate3d(self, x, key):
+        """Random rotation of a 3D array.
+        48 unique rotations = 6 (sides) x 4 (rotations of each side) x 2 (original and mirror).
+
+        Args:
+            x (numpy.array): 3D array to be rotated
+            key (int): Pattern key.
+
+        Returns:
+            Randomly rotated array
+        """
+        # Convention: dim0 = z, dim1 = y, dim2=x
+        if x.ndim != 3:
+            raise ValueError('Array must be 3D. Got %d dimensions.' % x.ndim)
+
+        (axes1, k1), (axes2, k2), mirror = self[key]
+
+        # Get the specified face front
+        xr = np.rot90(x, k=k1, axes=axes1)
+        # Turn that face
+        xr = np.rot90(xr, k=k2, axes=axes2)
+        # Mirror the array randomly
+        if mirror:
+            xr = np.fliplr(xr)
+
+        return xr
+
 
 class GeneratorFactory:
     """Data generator for model.
@@ -96,24 +79,33 @@ class GeneratorFactory:
         random_rotation (bool): Rotate randomly arrays for data augmentation.
         random_offset_range (None or tuple): Offset range (in HU units) for data augmentation (None=no random offset).
             Suggested value: (-60, 60)
-
-    Returns:
-         A generator instance.
     """
 
     def __init__(self, rescale_map=((-1000, -1), (400, 1)),
                  random_rotation=False, random_offset_range=None):
 
         (hu1, s1), (hu2, s2) = rescale_map
-        if (hu2 - hu1) == 0:
+        if abs(hu2 - hu1) <= EPSILON or abs(s2 - s1) <= EPSILON:
             raise ValueError('Invalid rescale mapping.')
 
         self.rescale_map = rescale_map
         self.random_rotation = random_rotation
-        self.rotation_patterns = RotationPatterns48()
+        self._rotation_patterns = RotationPatterns48()
         self.random_offset_range = random_offset_range
 
-    def _transform(self, x):
+    def _array2input(self, x):
+        x = x.astype('float32')
+
+        # Rescaling
+        (hu1, s1), (hu2, s2) = self.rescale_map
+        m = (s2 - s1) / (hu2 - hu1)
+        x = m * (x - hu1) + s1
+
+        x = np.expand_dims(np.expand_dims(x, 0), 4)  # Add batch and channels dimensions (Tensorflow format)
+
+        return x
+
+    def _random_transform(self, x):
         """Transform sample into array to be fed into keras model. The transformation performs:
         - Casting to float32
         - Random rotation
@@ -122,8 +114,6 @@ class GeneratorFactory:
         - Rescaling
         """
 
-        x = x.astype('float32')
-
         # Data augmentation
         if self.random_offset_range:
             x += np.random.uniform(low=self.random_offset_range[0],
@@ -131,48 +121,61 @@ class GeneratorFactory:
 
         if self.random_rotation:
             idx = np.random.randint(low=0, high=48)
-            x = rotate3d(x, self.rotation_patterns[idx])
-
-        # Rescaling
-        (hu1, s1), (hu2, s2) = self.rescale_map
-
-        m = (s2 - s1) / (hu2 - hu1)
-        x = m * (x - hu1) + s1
-
-        x = np.expand_dims(np.expand_dims(x, 0), 4)  # Add batch and channels dimensions (Tensorflow format)
+            x = self._rotation_patterns.rotate3d(x, idx)
 
         return x
 
-    def build_classifier_generator(self, data_paths, labels_path):
+    @staticmethod
+    def _get_subset_info(dataset_path, subset):
+
+        array_paths = glob(os.path.join(dataset_path, '*.npz'))
+        patient_ids = [os.path.basename(path).split('.')[0] for path in array_paths]
+
+        try:
+            labels = read_labels(os.path.join(dataset_path, subset + '.csv'), header=True)
+
+        except Exception as e:
+            raise IOError(e)
+
+        else:
+            not_found = []
+            for pid in labels.keys():
+                if pid not in patient_ids:
+                    not_found.append(pid)
+
+            if len(not_found) > 0:
+                raise IOError('No npz data found for Patients:', not_found)
+
+            return labels
+
+    def build_classifier_generator(self, dataset_path, subset):
         """Data generator for binary classification model.
         Reads from file and feed into the model one sample at a time.
 
         Args:
-            data_paths (str): path to npz files with array data.
-            labels_path (str): path to csv file with labels.
+            dataset_path (str): path to folder with array data (npz files) and label data (csv files).
+            subset (str): Name of subset. Either 'train', 'validation' or 'test'.
         Yields:
              A tuple (x, y) of data array and label.
         """
 
-        if len(data_paths) == 0:
-            raise ValueError('data_paths cannot be an empty list.')
-
-        labels = read_labels(labels_path, header=True)
+        labels = self._get_subset_info(dataset_path, subset)
+        patient_ids = list(labels.keys())
 
         while 1:
 
-            np.random.shuffle(data_paths)
+            np.random.shuffle(patient_ids)
 
-            for path in data_paths:
+            for patient_id in patient_ids:
+
                 # Input data
-                with np.load(path) as data:
-                    x = data['array_lungs']
+                path = os.path.join(dataset_path, patient_id + '.npz')
+                with np.load(path) as array_data:
+                    x = array_data['array_lungs']
 
-                x = self._transform(x)
+                x = self._array2input(self._random_transform(x))
 
                 # Output data
-                patient_id, __ = os.path.splitext(os.path.basename(path))
-
                 y = labels.get(patient_id)
                 if y is None:
                     raise ValueError('Unknown label for patient %s.' % patient_id)
@@ -180,12 +183,14 @@ class GeneratorFactory:
 
                 yield (x, y)
 
-    def build_autoencoder_generator(self, data_paths, input_size, batch_size=32, chunk_size=150):
+    def build_cae3d_generator(self, dataset_path, subset,
+                              input_size, batch_size=32, chunk_size=150):
         """Data generator for 3d convolutional autoencoder.
         First uploads a chunk of samples into memory and then feeds subarrays in batches to the model one at time.
 
         Args:
-            data_paths (str): path to npz files with array data.
+            dataset_path (str): path to folder with array data (npz files) and label data (csv files).
+            subset (str): Name of subset. Either 'train', 'validation' or 'test'.
             input_size (tuple): size of input subarray in (z, y, x) order.
             batch_size (int): batch size.
             chunk_size (int): number of samples to keep in memory at a time.
@@ -194,10 +199,10 @@ class GeneratorFactory:
              A tuple (x, x) of data subarrays.
         """
 
-        if len(data_paths) == 0:
-            raise ValueError('data_paths cannot be an empty list.')
+        labels = self._get_subset_info(dataset_path, subset)
+        patient_ids = list(labels.keys())
 
-        n_samples = len(data_paths)
+        n_samples = len(patient_ids)
 
         # Calculate chunk indices
         nb_chunks = n_samples // chunk_size
@@ -215,15 +220,17 @@ class GeneratorFactory:
 
         # Generator's endless loop starts here
         while 1:
-            np.random.shuffle(data_paths)
+            np.random.shuffle(patient_ids)
 
             for n1, n2 in chunks:
 
                 # Load chunk of patient arrays into memory
                 arrays = []
-                for path in data_paths[n1:n2]:
-                    with np.load(path) as data:
-                        x = data['array_lungs']
+                for patient_id in patient_ids[n1:n2]:
+
+                    path = os.path.join(dataset_path, patient_id + '.npz')
+                    with np.load(path) as array_data:
+                        x = array_data['array_lungs']
                     arrays.append(x)
 
                 # Extract samples from each array (these are just views)
@@ -247,7 +254,7 @@ class GeneratorFactory:
 
                 idx = 0
                 for sample in samples:
-                    x[idx % batch_size, 0] = self._transform(sample)
+                    x[idx % batch_size] = self._array2input(self._random_transform(sample))
                     idx += 1
 
                     if (idx % batch_size) == 0:

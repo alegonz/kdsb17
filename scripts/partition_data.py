@@ -1,45 +1,66 @@
+#!/usr/bin/env python3
+
 import os
-import random
 import sys
+import random
+from collections import OrderedDict
 
-sys.path.append('/data/code/')
+from kdsb17.utils.file import read_labels, write_labels
 
-from kdsb17.utils.datagen import read_labels
-from kdsb17.utils.file import makedir, make_symlinks
 
-data_path = '/data/data/'
-dataset = 'npz_1mm_ks5_05p'
+def main(argv=None):
+    """Partition the data. This script takes exactly two arguments from the command line.
 
-all_path = os.path.join(data_path, dataset, 'all')
-in_sample_csv_path = os.path.join(data_path, 'stage1_labels.csv')
-out_of_sample_csv_path = os.path.join(data_path, 'stage1_sample_submission.csv')
+    Args:
+        argv (list): A list with two strings:
+            1) Path containing the labels files.
+            2) Path to save the partitioned labels files.
+    """
 
-train_ratio = 0.8  # the rest is for validation
+    if argv is None:
+        try:
+            args = sys.argv
+        except:
+            raise SystemError('Command line arguments not found.')
+    else:
+        args = argv
 
-subsets = {}
+    if len(args) != 3:
+        raise ValueError('This script takes exactly two arguments: the path containing the labels files,'
+                         'and the path to save the partitioned labels files.')
 
-# Read label data.
-in_sample_labels = read_labels(in_sample_csv_path, header=True)
-out_of_sample_labels = read_labels(out_of_sample_csv_path, header=True)
+    labels_path, out_path = sys.argv[1], sys.argv[2]
 
-# Training and validation sets
-patients = list(in_sample_labels.keys())
-n_train = int(len(patients) * train_ratio)
+    print('Reading labels files from:', labels_path)
+    print('Saving partitioned files in:', out_path)
 
-random.seed(7102)
-random.shuffle(patients)
+    in_sample_csv_path = os.path.join(labels_path, 'stage1_labels.csv')
+    out_of_sample_csv_path = os.path.join(labels_path, 'stage1_solution.csv')
 
-subsets['train'] = patients[:n_train]
-subsets['validation'] = patients[n_train:]
+    train_ratio = 0.8  # the rest is for validation
 
-# Test set
-subsets['test'] = list(out_of_sample_labels.keys())
+    # Read label data.
+    in_sample_labels = read_labels(in_sample_csv_path, header=True)
+    out_of_sample_labels = read_labels(out_of_sample_csv_path, header=True)
 
-# Make symbolic links
-for name, patient_list in subsets.items():
+    # Training and validation sets
+    patients = list(in_sample_labels.keys())
+    n_train = int(len(patients) * train_ratio)
 
-    path = makedir(os.path.join(data_path, dataset, name))
-    relative_path = '../all'
+    random.seed(7102)
+    random.shuffle(patients)
+    train_set = patients[:n_train]
+    validation_set = patients[n_train:]
 
-    make_symlinks([patient_id + '.npz' for patient_id in patient_list],
-                  relative_path, path)
+    train_labels = {pid: label for pid, label in in_sample_labels.items() if pid in train_set}
+    validation_labels = {pid: label for pid, label in in_sample_labels.items() if pid in validation_set}
+
+    # The test set is the same as the out-of-sample set
+
+    # Save the sets to csv files
+    write_labels(train_labels, os.path.join(out_path, 'train.csv'), header=True)
+    write_labels(validation_labels, os.path.join(out_path, 'validation.csv'), header=True)
+    write_labels(out_of_sample_labels, os.path.join(out_path, 'test.csv'), header=True)
+
+if __name__ == '__main__':
+    main()
