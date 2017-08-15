@@ -93,19 +93,21 @@ class GeneratorFactory:
         self._rotation_patterns = RotationPatterns48()
         self.random_offset_range = random_offset_range
 
-    def _array2input(self, x):
-        x = x.astype('float32')
+    def _array2io(self, array):
+        z, y, x = array.shape
+        array = array.astype('float32')
 
         # Rescaling
         (hu1, s1), (hu2, s2) = self.rescale_map
         m = (s2 - s1) / (hu2 - hu1)
-        x = m * (x - hu1) + s1
+        array = m * (array - hu1) + s1
 
-        x = np.expand_dims(np.expand_dims(x, 0), 4)  # Add batch and channels dimensions (Tensorflow format)
+        i = np.reshape(array, (1, z, y, x, 1))  # Add sample and channels dimensions (Tensorflow format)
+        o = np.reshape(array, (1, z*y*x))  # Flatten z,y,x dimensions and add sample dimension
 
-        return x
+        return i, o
 
-    def _random_transform(self, x):
+    def _random_transform(self, array):
         """Transform sample into array to be fed into keras model. The transformation performs:
         - Casting to float32
         - Random rotation
@@ -116,14 +118,14 @@ class GeneratorFactory:
 
         # Data augmentation
         if self.random_offset_range:
-            x += np.random.uniform(low=self.random_offset_range[0],
-                                   high=self.random_offset_range[1])
+            array += np.random.uniform(low=self.random_offset_range[0],
+                                       high=self.random_offset_range[1])
 
         if self.random_rotation:
             idx = np.random.randint(low=0, high=48)
-            x = self._rotation_patterns.rotate3d(x, idx)
+            array = self._rotation_patterns.rotate3d(array, idx)
 
-        return x
+        return array
 
     @staticmethod
     def _get_subset_info(dataset_path, subset):
@@ -173,7 +175,7 @@ class GeneratorFactory:
                 with np.load(path) as array_data:
                     x = array_data['array_lungs']
 
-                x = self._array2input(self._random_transform(x))
+                x, _ = self._array2io(self._random_transform(x))
 
                 # Output data
                 y = labels.get(patient_id)
@@ -183,15 +185,15 @@ class GeneratorFactory:
 
                 yield (x, y)
 
-    def build_cae3d_generator(self, dataset_path, subset,
-                              input_size, batch_size=32, chunk_size=150):
+    def build_gmcae_generator(self, dataset_path, subset,
+                              input_shape, batch_size=32, chunk_size=150):
         """Data generator for 3d convolutional autoencoder.
         First uploads a chunk of samples into memory and then feeds subarrays in batches to the model one at time.
 
         Args:
             dataset_path (str): path to folder with array data (npz files) and label data (csv files).
             subset (str): Name of subset. Either 'train', 'validation' or 'test'.
-            input_size (tuple): size of input subarray in (z, y, x) order.
+            input_shape (tuple): size of input subarray in (z, y, x) order.
             batch_size (int): batch size.
             chunk_size (int): number of samples to keep in memory at a time.
 
@@ -236,13 +238,13 @@ class GeneratorFactory:
                 # Extract samples from each array (these are just views)
                 samples = []
                 for array in arrays:
-                    nb_bins_z, nb_bins_y, nb_bins_x = [n//s for n, s in zip(array.shape, input_size)]
+                    nb_bins_z, nb_bins_y, nb_bins_x = [n // s for n, s in zip(array.shape, input_shape)]
 
                     for i, j, k in product(range(nb_bins_z), range(nb_bins_y), range(nb_bins_x)):
                         # each combination of i,j,k is a sample
-                        i1, i2 = i * input_size[0], (i + 1) * input_size[0]
-                        j1, j2 = j * input_size[1], (j + 1) * input_size[1]
-                        k1, k2 = k * input_size[2], (k + 1) * input_size[2]
+                        i1, i2 = i * input_shape[0], (i + 1) * input_shape[0]
+                        j1, j2 = j * input_shape[1], (j + 1) * input_shape[1]
+                        k1, k2 = k * input_shape[2], (k + 1) * input_shape[2]
 
                         samples.append(array[i1:i2, j1:j2, k1:k2])
 
@@ -250,12 +252,13 @@ class GeneratorFactory:
                 np.random.shuffle(samples)
 
                 # Yield batches
-                x = np.zeros((batch_size, input_size[0], input_size[1], input_size[2], 1), dtype='float32')
+                x_in = np.zeros((batch_size, input_shape[0], input_shape[1], input_shape[2], 1), dtype='float32')
+                x_out = np.zeros((batch_size, input_shape[0]*input_shape[1]*input_shape[2]), dtype='float32')
 
                 idx = 0
                 for sample in samples:
-                    x[idx % batch_size] = self._array2input(self._random_transform(sample))
-                    idx += 1
+                    x_in[idx % batch_size], x_out[idx % batch_size] = self._array2io(self._random_transform(sample))
 
+                    idx += 1
                     if (idx % batch_size) == 0:
-                        yield (x, x)
+                        yield (x_in, x_out)
