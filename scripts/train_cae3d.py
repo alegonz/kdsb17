@@ -11,14 +11,14 @@ def main(argv=None):
 
     # Data file parameters
     checkpoints_path = '/root/share/personal/data/kdsb17/analysis/checkpoints/'
-    dataset_path = '/root/share/personal/data/kdsb17/analysis/datasets/npz_spacing1x1x1_kernel5_drop0.5p/'
+    dataset_path = '/root/share/personal/data/kdsb17/analysis/datasets/stage1/npz_spacing1x1x1_kernel5_drop0.5p/'
 
     # Training parameters
     input_size = (32, 32, 32)
     batch_size = 32
-    steps_per_epoch = 250
-    epochs = 20
-    validation_steps = 100
+    steps_per_epoch = 350
+    epochs = 50
+    validation_steps = 80
     chunk_size = 100
     optimizer = 'adam'
 
@@ -26,7 +26,7 @@ def main(argv=None):
     time_string = time.strftime('%Y%m%d_%H%M%S')
     model_path = os.path.join(checkpoints_path, time_string)  # dir for model files and log
 
-    lungnet = LungNet(nb_filters_per_layer=(64, 96, 128), n_gaussians=2,
+    lungnet = LungNet(nb_filters_per_layer=(64, 128, 256), n_gaussians=2,
                       optimizer=optimizer, batch_normalization=False,
                       model_path=model_path)
     lungnet.build_submodel('cae3d')

@@ -10,8 +10,7 @@ from keras.callbacks import ModelCheckpoint, EarlyStopping, CSVLogger
 from kdsb17.layers import SpatialPyramidPooling3D
 from kdsb17.callbacks import BatchLossCSVLogger
 from kdsb17.losses import gmd_log_likelihood
-
-# TODO: Freeze encoding layers in classifier submodel. We may need to divide the submodel compilation in separate steps.
+from kdsb17.utils.file import makedir
 
 
 class LungNet(object):
@@ -69,13 +68,15 @@ class LungNet(object):
         """Builds callbacks for training model.
         """
 
-        checkpointer = ModelCheckpoint(filepath=os.path.join(self.model_path, subfolder, self.weights_name_format),
+        submodel_path = makedir(os.path.join(self.model_path, subfolder))
+
+        checkpointer = ModelCheckpoint(filepath=os.path.join(submodel_path, self.weights_name_format),
                                        monitor='val_loss', save_best_only=True, save_weights_only=True)
 
         early_stopper = EarlyStopping(monitor='val_loss', min_delta=0, patience=self.es_patience)
 
-        epoch_logger = CSVLogger(os.path.join(self.model_path, subfolder, 'epoch_log.csv'))
-        batch_logger = BatchLossCSVLogger(os.path.join(self.model_path, subfolder, 'batch_log.csv'))
+        epoch_logger = CSVLogger(os.path.join(submodel_path, 'epoch_log.csv'))
+        batch_logger = BatchLossCSVLogger(os.path.join(submodel_path, 'batch_log.csv'))
 
         return [checkpointer, early_stopper, epoch_logger, batch_logger]
 

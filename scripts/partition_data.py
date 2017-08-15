@@ -3,7 +3,6 @@
 import os
 import sys
 import random
-from collections import OrderedDict
 
 from kdsb17.utils.file import read_labels, write_labels
 
