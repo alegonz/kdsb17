@@ -214,11 +214,11 @@ class GaussianMixtureCAE(NakedModel):
         # Output layer parametrizes a Gaussian Mixture Density.
         self._output_layer = self._build_gmd_layers(encoded, decoded)
 
-    def predict(self, x):
+    def predict(self, array):
         """Predict from model.
 
         Args:
-            x (numpy.ndarray): Input array of shape (samples, z, y, x, 1) and type float32.
+            array (numpy.ndarray): Input array of shape (samples, z, y, x, 1) and type float32.
 
         Returns:
             Array of the same shape and type as the input containing the 3D CAE reconstruction.
@@ -228,22 +228,22 @@ class GaussianMixtureCAE(NakedModel):
                 Ref: Bishop C. M., Mixture Density Networks, 1994.
                 https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/bishop-ncrg-94-004.pdf
         """
-        self._check_input_array(x)
+        self._check_input_array(array)
 
-        pred = self._model.predict(x)
+        pred = self._model.predict(array)
 
         m = self.n_gaussians
-        _, z, y, x, _ = x.shape
+        _, z, y, x, _ = array.shape
         splits = [m, 2*m]  # numpy.split expect locations, not sizes
 
         # Get GMD parameters
         # Parameters are concatenated along the second axis
         log_prior, sigma_sq, mu = np.split(pred, axis=1, indices_or_sections=splits)
 
-        mu = K.reshape(mu, [-1, z, y, x, m])
+        mu = np.reshape(mu, (-1, z, y, x, m))
 
-        which = (np.exp(log_prior)/np.sqrt(sigma_sq)).argmax(axis=2)
-        sample, z, y, x = np.indices(x.shape[:-1])
+        which = (np.exp(log_prior)/np.sqrt(sigma_sq)).argmax(axis=1)
+        sample, z, y, x = np.indices(array.shape[:-1])
 
         return np.expand_dims(mu[sample, z, y, x, which], axis=4)
 
