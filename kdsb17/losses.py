@@ -47,7 +47,8 @@ def build_gmd_log_likelihood(input_shape, m):
         mu = K.reshape(mu, [-1, z*y*x, m])  # -1 is for the sample dimension
         dist = K.sum(K.square(y_true - mu), axis=1)
 
-        exponent = log_prior - m*HALF_LOG_TWOPI - (m/2.0)*K.log(sigma_sq) - (1/2.0)*dist/sigma_sq
+        c = z * y * x  # Number of output dimensions
+        exponent = log_prior - c*HALF_LOG_TWOPI - (c/2.0)*K.log(sigma_sq) - (1/2.0)*dist/sigma_sq
 
         return -K.logsumexp(exponent, axis=1)
 
