@@ -40,6 +40,8 @@ def main():
                                optimizer=optimizer, es_patience=es_patience, model_path=model_path)
     gmcae.build_model()
 
+    gmcae.summary()
+
     # Create data generators
     train_gen_factory = GeneratorFactory(random_rotation=True, random_offset_range=None)
     val_gen_factory = GeneratorFactory(random_rotation=False, random_offset_range=None)

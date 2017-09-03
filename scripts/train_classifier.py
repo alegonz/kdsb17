@@ -12,7 +12,7 @@ def main():
 
     # ---------- Data parameters
     checkpoints_path = '/work/data/kdsb17/analysis/checkpoints/'
-    gmcae_weights_path = '20170903_060745/weights.17-0.432386.hdf5'
+    gmcae_weights_path = '20170903_060745/weights.47--57319.379541.hdf5'
     data_path = '/work/data/kdsb17/analysis/datasets/stage1/'
     dataset = 'npz_spacing1x1x1_kernel5_drop0.5p'
 
@@ -29,13 +29,13 @@ def main():
     optimizer = 'adam'
     es_patience = 10
 
-    freeze = ['a', 'b']
+    freeze = ['encoder_conv_0', 'encoder_conv_1', 'encoder_conv_2']
 
     # Training parameters
     # batch_size is 1 (full stochastic)
-    steps_per_epoch = 350
+    steps_per_epoch = 1117  # Size of train set
     epochs = 50
-    validation_steps = 80
+    validation_steps = 280  # Size of validation set
 
     # Define model
     time_string = time.strftime('%Y%m%d_%H%M%S')
@@ -50,6 +50,8 @@ def main():
     lungnet.build_model(freeze=freeze)
 
     lungnet.load_weights_from_file(os.path.join(checkpoints_path, gmcae_weights_path))
+
+    lungnet.summary()
 
     # Create data generators
     train_gen_factory = GeneratorFactory(random_rotation=True, random_offset_range=None)

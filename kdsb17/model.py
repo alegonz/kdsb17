@@ -52,6 +52,9 @@ class NakedModel(object):
     def _build_layers(self):
         pass
 
+    def _compile_model(self):
+        pass
+
     def build_model(self, freeze=None):
         """Build the model.
 
@@ -68,7 +71,7 @@ class NakedModel(object):
                 layer.trainable = False
                 print('%s is set to %d' % (layer_name, layer.trainable))
 
-        self._model.compile(optimizer=self.optimizer, loss=self._loss)
+        self._compile_model()
 
     def summary(self):
         """Print summary of model to stdout.
@@ -216,6 +219,9 @@ class GaussianMixtureCAE(NakedModel):
         # Output layer parametrizes a Gaussian Mixture Density.
         self._output_layer = self._build_gmd_layers(encoded, decoded)
 
+    def _compile_model(self):
+        self._model.compile(optimizer=self.optimizer, loss=self._loss)
+
     def predict(self, array):
         """Predict from model.
 
@@ -319,6 +325,9 @@ class LungNet(NakedModel):
         # Classifier
         # Inherits encoder layers from 3D CAE, and performs binary classification.
         self._output_layer = self._build_classifier_layers(encoded)
+
+    def _compile_model(self):
+        self._model.compile(optimizer=self.optimizer, loss=self._loss, metrics=['accuracy'])
 
     def predict(self, x):
         """Predict from model.
