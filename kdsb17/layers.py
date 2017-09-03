@@ -10,7 +10,7 @@ class SpatialPyramidPooling3D(Layer):
     Currently, there is no overlap between bins, i.e. stride size = bin size
 
     Args:
-        nb_bins_per_level (list of int): Number of bins into which the axes of the input volume is partitioned
+        nb_bins_per_level (tuple of int): Number of bins into which the axes of the input volume is partitioned
             for pooling (per channel). Each element of the list represents a pooling level in the pyramid.
 
             e.g. if [1, 2, 4] then each volume (each channel) is divided and pooled across

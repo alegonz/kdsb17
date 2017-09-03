@@ -1,11 +1,10 @@
 import os
 
 import numpy as np
-from keras import backend as K
 from keras.layers import (Input, Conv3D, Conv3DTranspose, Dense,
                           Activation, BatchNormalization, Dropout, Concatenate, Flatten, Lambda)
 from keras.models import Model
-from keras.callbacks import ModelCheckpoint, EarlyStopping, CSVLogger
+from keras.callbacks import ModelCheckpoint, EarlyStopping, CSVLogger, TensorBoard
 
 from kdsb17.layers import SpatialPyramidPooling3D
 from kdsb17.activations import log_softmax
@@ -45,7 +44,10 @@ class NakedModel(object):
         epoch_logger = CSVLogger(os.path.join(self.model_path, 'epoch_log.csv'))
         batch_logger = BatchLossCSVLogger(os.path.join(self.model_path, 'batch_log.csv'))
 
-        return [checkpointer, early_stopper, epoch_logger, batch_logger]
+        tensorboard_path = os.path.join(self.model_path, 'tensorboard')
+        tensorboard = TensorBoard(log_dir=tensorboard_path)
+
+        return [checkpointer, early_stopper, epoch_logger, batch_logger, tensorboard]
 
     def _build_layers(self):
         pass
@@ -126,16 +128,16 @@ class GaussianMixtureCAE(NakedModel):
     """
 
     def __init__(self,
-                 input_shape, nb_filters_per_layer=(64, 128, 256), kernel_size=(3, 3, 3),
-                 n_gaussians=2, batch_normalization=False,
+                 input_shape, n_gaussians=2,
+                 nb_filters_per_layer=(64, 128, 256), kernel_size=(3, 3, 3), batch_normalization=False,
                  optimizer='adam', es_patience=10,
                  model_path='/tmp/', weights_name_format='weights.{epoch:02d}-{val_loss:.6f}.hdf5'):
 
         super(GaussianMixtureCAE, self).__init__(optimizer, es_patience, model_path, weights_name_format)
 
         self.input_shape = input_shape
-        self.nb_filters_per_layer = nb_filters_per_layer
         self.n_gaussians = n_gaussians
+        self.nb_filters_per_layer = nb_filters_per_layer
         self.kernel_size = kernel_size
 
         self.batch_normalization = batch_normalization
@@ -259,17 +261,18 @@ class LungNet(NakedModel):
     The encoder weights are transferred from the GaussianMixtureCAE, the classifier is a stack of dense layers,
     and the output parametrizes a Bernoulli distribution on the class labels.
     """
-    def __init__(self, nb_filters_per_layer=(64, 128, 256),
-                 batch_normalization=False, dropout_rate=0.5,
+    def __init__(self, nb_filters_per_layer=(64, 128, 256), kernel_size=(3, 3, 3), batch_normalization=False,
+                 n_dense=(1024, 1024), dropout_rate=0.5,
                  optimizer='adam', es_patience=10,
                  model_path='/tmp/', weights_name_format='weights.{epoch:02d}-{val_loss:.6f}.hdf5'):
 
         super(LungNet, self).__init__(optimizer, es_patience, model_path, weights_name_format)
 
         self.nb_filters_per_layer = nb_filters_per_layer
-        self.kernel = (3, 3, 3)
-
+        self.kernel_size = kernel_size
         self.batch_normalization = batch_normalization
+
+        self.n_dense = n_dense
         self.dropout_rate = dropout_rate
 
         self.optimizer = optimizer
@@ -283,7 +286,7 @@ class LungNet(NakedModel):
 
         for i, nb_filters in enumerate(self.nb_filters_per_layer):
 
-            layer = Conv3D(nb_filters, kernel_size=self.kernel, strides=(2, 2, 2),
+            layer = Conv3D(nb_filters, kernel_size=self.kernel_size, strides=(2, 2, 2),
                            padding='same', name=('encoder_conv_%d' % i))(layer)
 
             if self.batch_normalization:
@@ -298,10 +301,9 @@ class LungNet(NakedModel):
         """
 
         h = SpatialPyramidPooling3D((1, 2, 4), name='spp3d')(encoded)
-        h = Dense(64, activation='sigmoid')(h)
-        h = Dropout(self.dropout_rate)(h)
-        h = Dense(32, activation='sigmoid')(h)
-        h = Dropout(self.dropout_rate)(h)
+        for n in self.n_dense:
+            h = Dense(n, activation='tanh')(h)
+            h = Dropout(self.dropout_rate)(h)
         y = Dense(1, activation='sigmoid')(h)
 
         return y

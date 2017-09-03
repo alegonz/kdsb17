@@ -1,71 +1,68 @@
+#!/usr/bin/env python3
+
 import os
 import sys
 import time
-sys.path.append('/data/code/')
 
-import numpy as np
-np.random.seed(1988)
+from kdsb17.utils.datagen import GeneratorFactory
+from kdsb17.model import LungNet
 
-from keras import backend
-from keras.layers import Input, Dense, Dropout
-from keras.models import Model
-from keras.callbacks import ModelCheckpoint, EarlyStopping, CSVLogger
 
-from kdsb17.layers import SpatialPyramidPooling3D
-from kdsb17.utils.datagen import GeneratorFactory, BatchLossCSVLogger
-from kdsb17.utils.file import makedir
+def main():
 
-print('image_dim_ordering:', backend.image_dim_ordering())
+    # ---------- Data parameters
+    checkpoints_path = '/work/data/kdsb17/analysis/checkpoints/'
+    gmcae_weights_path = '20170903_060745/weights.17-0.432386.hdf5'
+    data_path = '/work/data/kdsb17/analysis/datasets/stage1/'
+    dataset = 'npz_spacing1x1x1_kernel5_drop0.5p'
 
-# Data file parameters
-models_path = '/data/models'
-data_path = '/data/data/features/20170407_174348/weights.17-0.432386.hdf5'
-dataset = 'npz_2mm_ks3_05p'
-in_sample_csv_path = '/data/data/stage1_labels.csv'
+    # ---------- Model parameters
+    # Encoder parameters. These must be match the ones used in GaussianMixtureCAE.
+    nb_filters_per_layer = (64, 128, 256)
+    kernel_size = (3, 3, 3)
+    batch_normalization = False
 
-# Training parameters
-nb_epoch = 20
-optimizer = 'adam'
+    # Classifier parameters
+    n_dense = (1024, 1024)
+    dropout_rate = 0.5
 
-# Define model
-input_array = Input(shape=(128, None, None, None))
-h = SpatialPyramidPooling3D([1, 2, 4])(input_array)
-h = Dense(64, activation='sigmoid')(h)
-h = Dropout(0.5)(h)
-h = Dense(32, activation='sigmoid')(h)
-h = Dropout(0.5)(h)
-output_array = Dense(1, activation='sigmoid')(h)
+    optimizer = 'adam'
+    es_patience = 10
 
-model = Model(input_array, output_array)
-model.compile(optimizer=optimizer, loss='binary_crossentropy')
-model.summary()
+    freeze = ['a', 'b']
 
-# Create data generators
-train_path = os.path.join(data_path, dataset, 'train')
-datagen_train = GeneratorFactory(train_path, labels_path=in_sample_csv_path)
-nb_train_samples = len(datagen_train.patients)
+    # Training parameters
+    # batch_size is 1 (full stochastic)
+    steps_per_epoch = 350
+    epochs = 50
+    validation_steps = 80
 
-validation_path = os.path.join(data_path, dataset, 'validation')
-datagen_val = GeneratorFactory(validation_path, labels_path=in_sample_csv_path)
-nb_val_samples = len(datagen_val.patients)
+    # Define model
+    time_string = time.strftime('%Y%m%d_%H%M%S')
+    model_path = os.path.join(checkpoints_path, time_string)  # dir for model files and log
 
-train_generator = datagen_train.for_binary_classifier_full(array_type='cae3d_features')
-val_generator = datagen_val.for_binary_classifier_full(array_type='cae3d_features')
+    lungnet = LungNet(nb_filters_per_layer=nb_filters_per_layer, kernel_size=kernel_size,
+                      batch_normalization=batch_normalization,
+                      n_dense=n_dense, dropout_rate=dropout_rate,
+                      optimizer=optimizer, es_patience=es_patience,
+                      model_path=model_path)
 
-# Create callbacks
-time_string = time.strftime('%Y%m%d_%H%M%S')
-out_path = makedir(os.path.join(models_path, 'classifier', time_string))  # dir for model files and log
-weights_template = 'weights.{epoch:02d}-{val_loss:.2f}.hdf5'
+    lungnet.build_model(freeze=freeze)
 
-checkpointer = ModelCheckpoint(filepath=os.path.join(out_path, weights_template),
-                               monitor='val_loss', save_best_only=True)
+    lungnet.load_weights_from_file(os.path.join(checkpoints_path, gmcae_weights_path))
 
-early_stopper = EarlyStopping(monitor='val_loss', min_delta=0, patience=10)
+    # Create data generators
+    train_gen_factory = GeneratorFactory(random_rotation=True, random_offset_range=None)
+    val_gen_factory = GeneratorFactory(random_rotation=False, random_offset_range=None)
 
-csv_logger = CSVLogger(os.path.join(out_path, 'epoch_log.csv'))
-batch_logger = BatchLossCSVLogger(os.path.join(out_path, 'batch_log.csv'))
+    dataset_path = os.path.join(data_path, dataset)
+    train_gen = train_gen_factory.build_classifier_generator(dataset_path, 'train')
+    val_gen = val_gen_factory.build_classifier_generator(dataset_path, 'validation')
 
-# Train model
-model.fit_generator(generator=train_generator, samples_per_epoch=nb_train_samples, nb_epoch=nb_epoch,
-                    validation_data=val_generator, nb_val_samples=nb_val_samples,
-                    callbacks=[checkpointer, early_stopper, csv_logger, batch_logger])
+    # Train model
+    lungnet.fit_generator(train_generator=train_gen, steps_per_epoch=steps_per_epoch, epochs=epochs,
+                          validation_generator=val_gen, validation_steps=validation_steps)
+
+
+if __name__ == '__main__':
+    sys.exit(main())

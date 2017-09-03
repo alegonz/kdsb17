@@ -140,10 +140,7 @@ class GeneratorFactory:
             raise IOError(e)
 
         else:
-            not_found = []
-            for pid in labels.keys():
-                if pid not in patient_ids:
-                    not_found.append(pid)
+            not_found = [pid for pid in labels.keys() if pid not in patient_ids]
 
             if len(not_found) > 0:
                 raise IOError('No npz data found for Patients:', not_found)
