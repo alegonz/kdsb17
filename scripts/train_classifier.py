@@ -4,6 +4,8 @@ import os
 import sys
 import time
 
+from keras.optimizers import SGD
+
 from kdsb17.utils.datagen import GeneratorFactory
 from kdsb17.model import LungNet
 
@@ -21,15 +23,16 @@ def main():
     nb_filters_per_layer = (64, 128, 256)
     kernel_size = (3, 3, 3)
     batch_normalization = False
+    freeze = ['encoder_conv_0', 'encoder_conv_1', 'encoder_conv_2']
 
     # Classifier parameters
     n_dense = (1024, 1024)
-    dropout_rate = 0.5
+    dropout_rate = None  # 0.05
 
-    optimizer = 'adam'
+    learning_rate = 1e-6
+    momentum = 0.9
+    optimizer = SGD(lr=learning_rate, momentum=momentum)  # 'adam'
     es_patience = 10
-
-    freeze = ['encoder_conv_0', 'encoder_conv_1', 'encoder_conv_2']
 
     # Training parameters
     # batch_size is 1 (full stochastic)

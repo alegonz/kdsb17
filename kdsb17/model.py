@@ -309,7 +309,8 @@ class LungNet(NakedModel):
         h = SpatialPyramidPooling3D((1, 2, 4), name='spp3d')(encoded)
         for n in self.n_dense:
             h = Dense(n, activation='tanh')(h)
-            h = Dropout(self.dropout_rate)(h)
+            if self.dropout_rate:
+                h = Dropout(self.dropout_rate)(h)
         y = Dense(1, activation='sigmoid')(h)
 
         return y
