@@ -13,15 +13,16 @@ from kdsb17.model import LungNet
 def main():
 
     # ---------- Data parameters
-    checkpoints_path = '/work/data/kdsb17/analysis/checkpoints/'
+    checkpoints_path = '/root/share/personal/data/kdsb17/analysis/checkpoints/'
     gmcae_weights_path = '20170903_060745/weights.47--57319.379541.hdf5'
-    data_path = '/work/data/kdsb17/analysis/datasets/stage1/'
+    data_path = '/root/share/personal/data/kdsb17/analysis/datasets/stage1/'
     dataset = 'npz_spacing1x1x1_kernel5_drop0.5p'
 
     # ---------- Model parameters
     # Encoder parameters. These must be match the ones used in GaussianMixtureCAE.
     nb_filters_per_layer = (64, 128, 256)
     kernel_size = (3, 3, 3)
+    padding = 'same'
     batch_normalization = False
     freeze = ['encoder_conv_0', 'encoder_conv_1', 'encoder_conv_2']
 
@@ -44,7 +45,7 @@ def main():
     time_string = time.strftime('%Y%m%d_%H%M%S')
     model_path = os.path.join(checkpoints_path, time_string)  # dir for model files and log
 
-    lungnet = LungNet(nb_filters_per_layer=nb_filters_per_layer, kernel_size=kernel_size,
+    lungnet = LungNet(nb_filters_per_layer=nb_filters_per_layer, kernel_size=kernel_size, padding=padding,
                       batch_normalization=batch_normalization,
                       n_dense=n_dense, dropout_rate=dropout_rate,
                       optimizer=optimizer, es_patience=es_patience,

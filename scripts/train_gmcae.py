@@ -10,15 +10,16 @@ from kdsb17.utils.datagen import GeneratorFactory
 def main():
 
     # --------- Data parameters
-    checkpoints_path = '/work/data/kdsb17/analysis/checkpoints/'
-    dataset_path = '/work/data/kdsb17/analysis/datasets/stage1/npz_spacing1x1x1_kernel5_drop0.5p/'
+    checkpoints_path = '/root/share/personal/data/kdsb17/analysis/checkpoints/'
+    dataset_path = '/root/share/personal/data/kdsb17/analysis/datasets/stage1/npz_spacing1x1x1_kernel5_drop0.5p/'
 
     # --------- Model parameters
     # Network parameters
-    input_shape = (32, 32, 32)
     n_gaussians = 2
+    input_shape = (32, 32, 32)
     nb_filters_per_layer = (64, 128, 256)
     kernel_size = (3, 3, 3)
+    padding = 'same'
     batch_normalization = False
     optimizer = 'adam'
     es_patience = 10
@@ -26,7 +27,7 @@ def main():
     # Training parameters
     batch_size = 32
     steps_per_epoch = 350
-    epochs = 50
+    epochs = 100
     validation_steps = 80
     chunk_size = 100
 
@@ -34,8 +35,8 @@ def main():
     time_string = time.strftime('%Y%m%d_%H%M%S')
     model_path = os.path.join(checkpoints_path, time_string)  # dir for model files and log
 
-    gmcae = GaussianMixtureCAE(input_shape=input_shape, n_gaussians=n_gaussians,
-                               nb_filters_per_layer=nb_filters_per_layer, kernel_size=kernel_size,
+    gmcae = GaussianMixtureCAE(n_gaussians=n_gaussians, input_shape=input_shape,
+                               nb_filters_per_layer=nb_filters_per_layer, kernel_size=kernel_size, padding=padding,
                                batch_normalization=batch_normalization,
                                optimizer=optimizer, es_patience=es_patience, model_path=model_path)
     gmcae.build_model()

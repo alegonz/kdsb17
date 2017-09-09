@@ -123,7 +123,41 @@ class NakedModel(object):
             raise ValueError('Size of last dimension of input array must be exactly 1.')
 
 
-class GaussianMixtureCAE(NakedModel):
+class Encoder(object):
+    # TODO: Write me a documentation
+
+    def __init__(self, nb_filters_per_layer, kernel_size, padding, batch_normalization):
+        self.nb_filters_per_layer = nb_filters_per_layer
+        self.kernel_size = kernel_size
+        self.padding = padding
+        self.batch_normalization = batch_normalization
+
+    def _custom_conv3d(self, layer, nb_filters, strides, name):
+        # TODO: Write me a documentation
+
+        layer = Conv3D(nb_filters, kernel_size=self.kernel_size, strides=strides,
+                       padding=self.padding, name=('encoder_conv_%s' % name))(layer)
+
+        if self.batch_normalization:
+            layer = BatchNormalization(mode=0, axis=1, name=('encoder_bn_%s' % name))(layer)
+
+        layer = Activation('relu', name=('encoder_act_%s' % name))(layer)
+
+        return layer
+
+    def _build_encoder_layers(self, layer):
+        """Stacks sequence of conv/pool layers to make the encoder half.
+        """
+
+        for i, nb_filters in enumerate(self.nb_filters_per_layer):
+            # layer = self._custom_conv3d(layer, nb_filters, (1, 1, 1), '1-1_%d' % i)
+            layer = self._custom_conv3d(layer, nb_filters, (1, 1, 1), '1-2_%d' % i)
+            layer = self._custom_conv3d(layer, nb_filters, (2, 2, 2), '2-1_%d' % i)
+
+        return layer
+
+
+class GaussianMixtureCAE(Encoder, NakedModel):
     """Builds and compiles a model for representation learning 3D CT lung scans:
     Performs feature learning on CT scan patches. The network structure is as follows:
         Input -> Encoder -> Decoder -> Output
@@ -131,35 +165,31 @@ class GaussianMixtureCAE(NakedModel):
     """
 
     def __init__(self,
-                 input_shape, n_gaussians=2,
-                 nb_filters_per_layer=(64, 128, 256), kernel_size=(3, 3, 3), batch_normalization=False,
+                 n_gaussians, input_shape,
+                 nb_filters_per_layer=(64, 128, 256), kernel_size=(3, 3, 3), padding='same', batch_normalization=False,
                  optimizer='adam', es_patience=10,
                  model_path='/tmp/', weights_name_format='weights.{epoch:02d}-{val_loss:.6f}.hdf5'):
 
-        super(GaussianMixtureCAE, self).__init__(optimizer, es_patience, model_path, weights_name_format)
+        # TODO: Is there really no way to do this nicely with super()?
+        NakedModel.__init__(self, optimizer, es_patience, model_path, weights_name_format)
+        Encoder.__init__(self, nb_filters_per_layer, kernel_size, padding, batch_normalization)
 
         self.input_shape = input_shape
         self.n_gaussians = n_gaussians
-        self.nb_filters_per_layer = nb_filters_per_layer
-        self.kernel_size = kernel_size
-
-        self.batch_normalization = batch_normalization
+        self.n_dense_log_prior = 128
+        self.n_dense_sigma_sq = 128
 
         self._loss = build_gmd_log_likelihood(input_shape, n_gaussians)
 
-    def _build_encoder_layers(self, layer):
-        """Stacks sequence of conv/pool layers to make the encoder half.
-        """
+    def _custom_conv3dtranspose(self, layer, nb_filters, strides, name):
 
-        for i, nb_filters in enumerate(self.nb_filters_per_layer):
+        layer = Conv3DTranspose(nb_filters, kernel_size=self.kernel_size, strides=strides,
+                                padding=self.padding, name=('decoder_conv_%s' % name))(layer)
 
-            layer = Conv3D(nb_filters, kernel_size=self.kernel_size, strides=(2, 2, 2),
-                           padding='same', name=('encoder_conv_%d' % i))(layer)
+        if self.batch_normalization:
+            layer = BatchNormalization(mode=0, axis=1, name=('decoder_bn_%s' % name))(layer)
 
-            if self.batch_normalization:
-                layer = BatchNormalization(mode=0, axis=1, name=('encoder_bn_%d' % i))(layer)
-
-            layer = Activation('relu', name=('encoder_act_%d' % i))(layer)
+        layer = Activation('relu', name=('decoder_act_%s' % name))(layer)
 
         return layer
 
@@ -168,14 +198,9 @@ class GaussianMixtureCAE(NakedModel):
         """
 
         for i, nb_filters in enumerate(self.nb_filters_per_layer[::-1]):
-
-            layer = Conv3DTranspose(nb_filters, kernel_size=self.kernel_size, strides=(2, 2, 2),
-                                    padding='same', name=('decoder_conv_%d' % i))(layer)
-
-            if self.batch_normalization:
-                layer = BatchNormalization(mode=0, axis=1, name=('decoder_bn_%d' % i))(layer)
-
-            layer = Activation('relu', name=('decoder_act_%d' % i))(layer)
+            # layer = self._custom_conv3dtranspose(layer, nb_filters, (1, 1, 1), '1-1_%d' % i)
+            layer = self._custom_conv3dtranspose(layer, nb_filters, (2, 2, 2), '2-1_%d' % i)
+            layer = self._custom_conv3dtranspose(layer, nb_filters, (1, 1, 1), '1-2_%d' % i)
 
         return layer
 
@@ -187,7 +212,7 @@ class GaussianMixtureCAE(NakedModel):
         # First squeeze the filters with a convolution before flattening
         log_prior = Conv3D(1, kernel_size=self.kernel_size, padding='same', name='log_prior_conv3d')(encoded)
         log_prior = Flatten(name='log_prior_flatten')(log_prior)
-        log_prior = Dense(128, activation='relu', name='log_prior_dense_1')(log_prior)
+        log_prior = Dense(self.n_dense_log_prior, activation='relu', name='log_prior_dense_1')(log_prior)
         log_prior = Dense(self.n_gaussians, activation=log_softmax, name='log_prior')(log_prior)
 
         # Means
@@ -198,7 +223,7 @@ class GaussianMixtureCAE(NakedModel):
         # First squeeze the filters with a convolution before flattening
         sigma_sq = Conv3D(1, kernel_size=self.kernel_size, padding='same', name='sigma_sq_conv3d')(encoded)
         sigma_sq = Flatten(name='sigma_sq_flatten')(sigma_sq)
-        sigma_sq = Dense(128, activation='relu', name='sigma_sq_dense_1')(sigma_sq)
+        sigma_sq = Dense(self.n_dense_sigma_sq, activation='relu', name='sigma_sq_dense_1')(sigma_sq)
         sigma_sq = Dense(self.n_gaussians, name='sigma_sq_dense_2')(sigma_sq)
         sigma_sq = ShiftedELU(shift=1.0, alpha=1.0, name='sigma_sq')(sigma_sq)
 
@@ -256,7 +281,7 @@ class GaussianMixtureCAE(NakedModel):
         return np.expand_dims(mu[sample, z, y, x, which], axis=4)
 
 
-class LungNet(NakedModel):
+class LungNet(Encoder, NakedModel):
     """Builds and compiles a set of two models for representation learning and classification of 3D CT lung scans:
 
     Classifies full CT lung scans, using the features learned by the GaussianMixtureCAE.
@@ -267,40 +292,20 @@ class LungNet(NakedModel):
     The encoder weights are transferred from the GaussianMixtureCAE, the classifier is a stack of dense layers,
     and the output parametrizes a Bernoulli distribution on the class labels.
     """
-    def __init__(self, nb_filters_per_layer=(64, 128, 256), kernel_size=(3, 3, 3), batch_normalization=False,
+    def __init__(self,
+                 nb_filters_per_layer=(64, 128, 256), kernel_size=(3, 3, 3), padding='same', batch_normalization=False,
                  n_dense=(1024, 1024), dropout_rate=0.5,
                  optimizer='adam', es_patience=10,
                  model_path='/tmp/', weights_name_format='weights.{epoch:02d}-{val_loss:.6f}.hdf5'):
 
-        super(LungNet, self).__init__(optimizer, es_patience, model_path, weights_name_format)
-
-        self.nb_filters_per_layer = nb_filters_per_layer
-        self.kernel_size = kernel_size
-        self.batch_normalization = batch_normalization
+        # TODO: Is there really no way to do this nicely with super()?
+        NakedModel.__init__(self, optimizer, es_patience, model_path, weights_name_format)
+        Encoder.__init__(self, nb_filters_per_layer, kernel_size, padding, batch_normalization)
 
         self.n_dense = n_dense
         self.dropout_rate = dropout_rate
 
-        self.optimizer = optimizer
-        self.es_patience = es_patience
-
         self._loss = 'binary_crossentropy'
-
-    def _build_encoder_layers(self, layer):
-        """Stacks sequence of conv/pool layers to make the encoder half.
-        """
-
-        for i, nb_filters in enumerate(self.nb_filters_per_layer):
-
-            layer = Conv3D(nb_filters, kernel_size=self.kernel_size, strides=(2, 2, 2),
-                           padding='same', name=('encoder_conv_%d' % i))(layer)
-
-            if self.batch_normalization:
-                layer = BatchNormalization(mode=0, axis=1, name=('encoder_bn_%d' % i))(layer)
-
-            layer = Activation('relu', name=('encoder_act_%d' % i))(layer)
-
-        return layer
 
     def _build_classifier_layers(self, encoded):
         """Builds layers for classification on top of encoder layers.
