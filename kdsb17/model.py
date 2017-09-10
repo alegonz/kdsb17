@@ -4,7 +4,7 @@ import numpy as np
 from keras.layers import (Input, Conv3D, Conv3DTranspose, Dense,
                           Activation, BatchNormalization, Dropout, Concatenate, Flatten, Lambda)
 from keras.models import Model
-from keras.callbacks import ModelCheckpoint, EarlyStopping, CSVLogger, TensorBoard
+from keras.callbacks import ModelCheckpoint, EarlyStopping, CSVLogger, TensorBoard, TerminateOnNaN
 
 from kdsb17.layers import SpatialPyramidPooling3D
 from kdsb17.activations import log_softmax
@@ -19,12 +19,14 @@ class NakedModel(object):
 
     def __init__(self,
                  optimizer='adam', es_patience=10,
-                 model_path='/tmp/', weights_name_format='weights.{epoch:02d}-{val_loss:.6f}.hdf5'):
+                 model_path='/tmp/', weights_name_format='weights.{epoch:02d}-{val_loss:.6f}.hdf5',
+                 histogram_freq=0):
 
         self.model_path = model_path
         self.weights_name_format = weights_name_format
         self.optimizer = optimizer
         self.es_patience = es_patience
+        self.histogram_freq = histogram_freq
 
         self._loss = None
         self._input_layer = None
@@ -45,9 +47,12 @@ class NakedModel(object):
         batch_logger = BatchLossCSVLogger(os.path.join(self.model_path, 'batch_log.csv'))
 
         tensorboard_path = os.path.join(self.model_path, 'tensorboard')
-        tensorboard = TensorBoard(log_dir=tensorboard_path)
+        tensorboard = TensorBoard(log_dir=tensorboard_path,
+                                  histogram_freq=self.histogram_freq, write_grads=(self.histogram_freq > 0))
 
-        return [checkpointer, early_stopper, epoch_logger, batch_logger, tensorboard]
+        terminator = TerminateOnNaN()
+
+        return [checkpointer, early_stopper, epoch_logger, batch_logger, tensorboard, terminator]
 
     def _build_layers(self):
         pass
@@ -168,10 +173,11 @@ class GaussianMixtureCAE(Encoder, NakedModel):
                  n_gaussians, input_shape,
                  nb_filters_per_layer=(64, 128, 256), kernel_size=(3, 3, 3), padding='same', batch_normalization=False,
                  optimizer='adam', es_patience=10,
-                 model_path='/tmp/', weights_name_format='weights.{epoch:02d}-{val_loss:.6f}.hdf5'):
+                 model_path='/tmp/', weights_name_format='weights.{epoch:02d}-{val_loss:.6f}.hdf5',
+                 histogram_freq=0):
 
         # TODO: Is there really no way to do this nicely with super()?
-        NakedModel.__init__(self, optimizer, es_patience, model_path, weights_name_format)
+        NakedModel.__init__(self, optimizer, es_patience, model_path, weights_name_format, histogram_freq)
         Encoder.__init__(self, nb_filters_per_layer, kernel_size, padding, batch_normalization)
 
         self.input_shape = input_shape

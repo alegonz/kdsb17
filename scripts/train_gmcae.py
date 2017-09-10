@@ -2,6 +2,7 @@
 
 import os
 import time
+import numpy as np
 
 from kdsb17.model import GaussianMixtureCAE
 from kdsb17.utils.datagen import GeneratorFactory
@@ -15,7 +16,7 @@ def main():
 
     # --------- Model parameters
     # Network parameters
-    n_gaussians = 2
+    n_gaussians = 4
     input_shape = (32, 32, 32)
     nb_filters_per_layer = (64, 128, 256)
     kernel_size = (3, 3, 3)
@@ -23,6 +24,7 @@ def main():
     batch_normalization = False
     optimizer = 'adam'
     es_patience = 10
+    histogram_freq = 1
 
     # Training parameters
     batch_size = 32
@@ -38,7 +40,8 @@ def main():
     gmcae = GaussianMixtureCAE(n_gaussians=n_gaussians, input_shape=input_shape,
                                nb_filters_per_layer=nb_filters_per_layer, kernel_size=kernel_size, padding=padding,
                                batch_normalization=batch_normalization,
-                               optimizer=optimizer, es_patience=es_patience, model_path=model_path)
+                               optimizer=optimizer, es_patience=es_patience, model_path=model_path,
+                               histogram_freq=histogram_freq)
     gmcae.build_model()
 
     gmcae.summary()
@@ -54,8 +57,25 @@ def main():
                                                     batch_size=batch_size, chunk_size=chunk_size)
 
     # Train model
+    if histogram_freq > 0:
+        # The TensorBoard callback cannot make histograms if the validation data comes from a generator
+        # Thus, we have to burn the generator to make a static validation set
+        val_data_x = []
+        val_data_y = []
+
+        for i, (x, y) in enumerate(val_gen):
+            if i == validation_steps:
+                break
+            val_data_x.append(x)
+            val_data_y.append(y)
+
+        val_data = (np.concatenate(val_data_x, axis=0),
+                    np.concatenate(val_data_y, axis=0))
+    else:
+        val_data = val_gen
+
     gmcae.fit_generator(train_generator=train_gen, steps_per_epoch=steps_per_epoch, epochs=epochs,
-                        validation_generator=val_gen, validation_steps=validation_steps)
+                        validation_generator=val_data, validation_steps=validation_steps)
 
 if __name__ == '__main__':
     main()
