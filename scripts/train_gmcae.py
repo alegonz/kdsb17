@@ -4,6 +4,8 @@ import os
 import time
 import numpy as np
 
+from keras.optimizers import Adam
+
 from kdsb17.model import GaussianMixtureCAE
 from kdsb17.utils.datagen import GeneratorFactory
 
@@ -22,7 +24,7 @@ def main():
     kernel_size = (3, 3, 3)
     padding = 'same'
     batch_normalization = False
-    optimizer = 'adam'
+    optimizer = Adam(lr=0.0001)
     es_patience = 10
     histogram_freq = 1
 
