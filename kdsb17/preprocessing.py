@@ -179,7 +179,7 @@ def dcm2array(dcm):
     # Safety measure
     # There a few cases in which the pixel padding value is valid
     # but does not correspond with the actual padded values in the data (< -1000).
-    # Furthermore, CT is represented at with 12 bits, hence it cannot exceed 4095.
+    # Furthermore, CT is represented at most with 12 bits, thus it cannot exceed 4095.
     array[array <= -1000] = -1000 - intercept
     array[array > 4095] = 4095
 

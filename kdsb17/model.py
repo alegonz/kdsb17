@@ -300,7 +300,7 @@ class LungNet(Encoder, NakedModel):
     """
     def __init__(self,
                  nb_filters_per_layer=(64, 128, 256), kernel_size=(3, 3, 3), padding='same', batch_normalization=False,
-                 n_dense=(1024, 1024), dropout_rate=0.5,
+                 spp_nb_bins_per_level=(1, 2, 4), n_dense=(1024, 1024), dropout_rate=0.5,
                  optimizer='adam', es_patience=10,
                  model_path='/tmp/', weights_name_format='weights.{epoch:02d}-{val_loss:.6f}.hdf5'):
 
@@ -308,6 +308,7 @@ class LungNet(Encoder, NakedModel):
         NakedModel.__init__(self, optimizer, es_patience, model_path, weights_name_format)
         Encoder.__init__(self, nb_filters_per_layer, kernel_size, padding, batch_normalization)
 
+        self.spp_nb_bins_per_level = spp_nb_bins_per_level
         self.n_dense = n_dense
         self.dropout_rate = dropout_rate
 
@@ -317,9 +318,9 @@ class LungNet(Encoder, NakedModel):
         """Builds layers for classification on top of encoder layers.
         """
 
-        h = SpatialPyramidPooling3D((1, 2, 4), name='spp3d')(encoded)
+        h = SpatialPyramidPooling3D(self.spp_nb_bins_per_level, name='spp3d')(encoded)
         for n in self.n_dense:
-            h = Dense(n, activation='tanh')(h)
+            h = Dense(n, activation='relu')(h)
             if self.dropout_rate:
                 h = Dropout(self.dropout_rate)(h)
         y = Dense(1, activation='sigmoid')(h)

@@ -4,7 +4,7 @@ import os
 import sys
 import time
 
-from keras.optimizers import SGD
+from keras.optimizers import Adam
 
 from kdsb17.utils.datagen import GeneratorFactory
 from kdsb17.model import LungNet
@@ -25,20 +25,19 @@ def main():
     padding = 'same'
     batch_normalization = False
     freeze = ['encoder_conv_1-2_0', 'encoder_conv_2-1_0',
-              'encoder_conv_1-2_1', 'encoder_conv_2-1_1',
-              'encoder_conv_1-2_2', 'encoder_conv_2-1_2']
+              'encoder_conv_1-2_1', 'encoder_conv_2-1_1']
 
     # Classifier parameters
+    spp_nb_bins_per_level = (1, 2, 4)
     n_dense = (1024, 1024)
-    dropout_rate = 0.5
+    dropout_rate = None
 
-    learning_rate = 1e-6
-    momentum = 0.9
-    optimizer = SGD(lr=learning_rate, momentum=momentum)
+    learning_rate = 1e-7
+    optimizer = Adam(lr=learning_rate)
     es_patience = 10
 
     # Training parameters
-    volume_resize_factor = 0.4  # TODO: introduced to reduce memory usage. Get either a bigger GPU or rethink gmcae size
+    volume_resize_factor = 0.3  # TODO: introduced to reduce memory usage. Get either a bigger GPU or rethink GMCAE size
     # batch_size is 1 (full stochastic)
     steps_per_epoch = 1117  # Size of train set
     epochs = 50
@@ -50,7 +49,7 @@ def main():
 
     lungnet = LungNet(nb_filters_per_layer=nb_filters_per_layer, kernel_size=kernel_size, padding=padding,
                       batch_normalization=batch_normalization,
-                      n_dense=n_dense, dropout_rate=dropout_rate,
+                      spp_nb_bins_per_level=spp_nb_bins_per_level, n_dense=n_dense, dropout_rate=dropout_rate,
                       optimizer=optimizer, es_patience=es_patience,
                       model_path=model_path)
 
