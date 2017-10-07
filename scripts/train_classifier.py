@@ -14,7 +14,7 @@ def main():
 
     # ---------- Data parameters
     checkpoints_path = '/root/share/personal/data/kdsb17/analysis/checkpoints/'
-    gmcae_weights_path = '20170903_060745/weights.47--57319.379541.hdf5'
+    gmcae_weights_path = '20170918_053728/weights.99--53584.245996.hdf5'
     data_path = '/root/share/personal/data/kdsb17/analysis/datasets/stage1/'
     dataset = 'npz_spacing1x1x1_kernel5_drop0.5p'
 
@@ -24,18 +24,21 @@ def main():
     kernel_size = (3, 3, 3)
     padding = 'same'
     batch_normalization = False
-    freeze = ['encoder_conv_0', 'encoder_conv_1', 'encoder_conv_2']
+    freeze = ['encoder_conv_1-2_0', 'encoder_conv_2-1_0',
+              'encoder_conv_1-2_1', 'encoder_conv_2-1_1',
+              'encoder_conv_1-2_2', 'encoder_conv_2-1_2']
 
     # Classifier parameters
     n_dense = (1024, 1024)
-    dropout_rate = None  # 0.05
+    dropout_rate = 0.5
 
     learning_rate = 1e-6
     momentum = 0.9
-    optimizer = SGD(lr=learning_rate, momentum=momentum)  # 'adam'
+    optimizer = SGD(lr=learning_rate, momentum=momentum)
     es_patience = 10
 
     # Training parameters
+    volume_resize_factor = 0.4  # TODO: introduced to reduce memory usage. Get either a bigger GPU or rethink gmcae size
     # batch_size is 1 (full stochastic)
     steps_per_epoch = 1117  # Size of train set
     epochs = 50
@@ -58,8 +61,8 @@ def main():
     lungnet.summary()
 
     # Create data generators
-    train_gen_factory = GeneratorFactory(random_rotation=True, random_offset_range=None)
-    val_gen_factory = GeneratorFactory(random_rotation=False, random_offset_range=None)
+    train_gen_factory = GeneratorFactory(volume_resize_factor=volume_resize_factor, random_rotation=True, random_offset_range=None)
+    val_gen_factory = GeneratorFactory(volume_resize_factor=volume_resize_factor, random_rotation=False, random_offset_range=None)
 
     dataset_path = os.path.join(data_path, dataset)
     train_gen = train_gen_factory.build_classifier_generator(dataset_path, 'train')

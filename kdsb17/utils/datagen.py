@@ -5,6 +5,7 @@ from itertools import product
 import numpy as np
 
 from kdsb17.utils.file import read_labels
+from kdsb17.preprocessing import zoom
 
 EPSILON = 1e-6
 
@@ -81,7 +82,8 @@ class GeneratorFactory:
             Suggested value: (-60, 60)
     """
 
-    def __init__(self, rescale_map=((-1000, -1), (400, 1)),
+    def __init__(self,
+                 rescale_map=((-1000, -1), (400, 1)), volume_resize_factor=None,
                  random_rotation=False, random_offset_range=None):
 
         (hu1, s1), (hu2, s2) = rescale_map
@@ -89,6 +91,7 @@ class GeneratorFactory:
             raise ValueError('Invalid rescale mapping.')
 
         self.rescale_map = rescale_map
+        self.volume_resize_factor = volume_resize_factor
         self.random_rotation = random_rotation
         self._rotation_patterns = RotationPatterns48()
         self.random_offset_range = random_offset_range
@@ -107,14 +110,16 @@ class GeneratorFactory:
 
         return i, o
 
-    def _random_transform(self, array):
+    def _transform(self, array):
         """Transform sample into array to be fed into keras model. The transformation performs:
-        - Casting to float32
+        - Volume resizing (useful for controlling memory usage)
         - Random rotation
         - Random offset addition
-        - Mean subtraction
-        - Rescaling
         """
+
+        if self.volume_resize_factor:
+            alpha = self.volume_resize_factor ** (1/3.0)
+            array = zoom(array, zoom=alpha, mode='nearest')
 
         # Data augmentation
         if self.random_offset_range:
@@ -172,7 +177,7 @@ class GeneratorFactory:
                 with np.load(path) as array_data:
                     x = array_data['array_lungs']
 
-                x, _ = self._array2io(self._random_transform(x))
+                x, _ = self._array2io(self._transform(x))
 
                 # Output data
                 y = labels.get(patient_id)
@@ -254,7 +259,7 @@ class GeneratorFactory:
 
                 idx = 0
                 for sample in samples:
-                    x_in[idx % batch_size], x_out[idx % batch_size] = self._array2io(self._random_transform(sample))
+                    x_in[idx % batch_size], x_out[idx % batch_size] = self._array2io(self._transform(sample))
 
                     idx += 1
                     if (idx % batch_size) == 0:
