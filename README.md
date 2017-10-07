@@ -30,17 +30,25 @@ The current architecture of both networks is shown in the figure below:
 ### Gaussian Mixture Convolutional AutoEncoder (GMCAE)
 The purpose of this network is to learn features from the 3D CT lung arrays that could be transferred to the second network for classification.
 
-As a reconstruction objective for the CAE, one could attempt to use a linear activation at the output layer and minimize a MSE objective, but this would fail because the array voxels have a multimodal distribution and a linear/MSE objective, which will tend to predict the average of the distribution and likely yield meaningless predictions.
-
-Thus, instead The GMCAE is designed to produce outputs that determine the parameters \alpha (priors), \sigma (variances) and \mu (means) of the mixture of Gaussians. \alpha, \sigma and \mu are functions of **x** and the network parameters \theta.
+* Input:
+  * A 3D sub-array of size 32x32x32, corresponding to a cube patch of 3.2mm which should be enough to contain lung nodules.
+* Outputs:
+  * **log(alpha)**: A vector of **m** elements that correspond to the log priors of each Gaussian in the mixture. The log priors are with LogSoftmax activiation.
+  * **sigma^2**: A vector of **m** elements that correspond to the variances of each Gaussian. The original paper of Mixure Density Networks suggests parametrizing the variances with an exponential activation function. However, an exponential function is prone to numerical instability, and here instead use a ShiftedELU activation. This is just the ELU activation with an added constant of 1, such that the output is always greater than zero. [Another work on Mixture Density Networks also came up with this idea before](https://github.com/axelbrando/Mixture-Density-Networks-for-distribution-and-uncertainty-estimation).
+  * **mu**: A 4-D tensor with the means (array reconstructions) of each Gaussian. This is parametrized with a linear activation function.
+* Loss function
+  * As a reconstruction objective for the CAE, one could attempt to use a linear activation at the output layer and minimize a MSE objective, but this would fail because the array voxels have a multimodal distribution and a linear/MSE objective, which will tend to predict the average of the distribution and likely yield meaningless predictions.
+  * Thus, instead The GMCAE is designed to produce outputs that determine the parameters **alpha** (priors), **sigma^2** (variances) and **mu** (means) of the mixture of Gaussians. **alpha**, **sigma** and **mu** are functions of **x** and the network parameters **theta**.
 (Since we are doing reconstruction, **t**=**x** in this case.)
 
 ### CNN Classifier
-The purpose of the classifier
+The purpose of the classifier. The output is a single sigmoid unit, and network is trained to minimize the Log Loss.
+Since the model should be able to handle arrays of variable size, a Spatial Pyramid Pooling layer ([He, 2014](https://arxiv.org/abs/1406.4729)) is used to interface between the convolutional and fully-connected layers.
 
 ## Current results
 
 ### Gaussian Mixture Convolutional AutoEncoder (GMCAE)
+
 
 ### CNN Classifier
 So far a validation loss of around 0.57 and an accuracy of about 74% (par with chance level), which is still quite far from the winning entries (around 0.40).
@@ -48,7 +56,7 @@ So far a validation loss of around 0.57 and an accuracy of about 74% (par with c
 ### Current issues
  * Gradient explosion
    * It's hard to stabilize the gradients. So far, I've been able to control the gradients with small learning rates and/or gradient norm clipping.
-    * I also tried to parametrize directly the inverse variance but that it wasn't helpful.
+    * I also tried to parametrize directly the inverse variance but it wasn't helpful.
     * Also tried fixing the variances to a constant value (determined empirically) but that didn't work either.
  * Unknown lower bound of loss function
    * The Gaussians in the mixture are densities, so point estimates of the likelihood can yield negative values if the variances are small enough.
