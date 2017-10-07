@@ -1,4 +1,4 @@
-# Attempt at the classification problem featured in the Kaggle Data Science Bowl 2017
+# Gaussian Mixture Convolutional AutoEncoder for feature learning on 3D CT lung scan data
 
 ##### Notes
 * **This is still work in progress.**
@@ -22,7 +22,6 @@ What I'm attempting here is a rather more "purist" (for lack of a better word) a
 ![model_overview](illustrations/model_overview.png "Model overview")
 
 ## Data details
-![equation] \sqrt[n]{k}
 
 The details of preprocessing are explained [here]().
 
@@ -30,9 +29,38 @@ The details of preprocessing are explained [here]().
 
 ### Gaussian Mixture Convolutional AutoEncoder (GMCAE)
 
+The purpose of this network is to learn features from the 3D CT lung arrays that could be transferred to the second network for classification.
+
+As a reconstruction objective for the CAE, one could attempt to use a linear activation at the output layer and minimize a MSE objective, but this would fail because the array voxels have a multimodal distribution and a linear/MSE objective will tend to predict the average of the mixture and likely yield meaningless predictions.
+
+Thus, instead The GMCAE is designed to produce outputs that determine the parameters \alpha (priors), \sigma (variances) and \mu (means) of the mixture of Gaussians. \alpha, \sigma and \mu are functions of **x** and the network parameters \theta.
+(Since we are doing reconstruction, **t**=**x** in this case.)
+
+
+
+
 ### CNN Classifier
+The purpose of the classifier
+
+The current architecture of both networks is shown in the figure below:
+
+![network_details](illustrations/network_details.png "Network details")
 
 ## Current results
+
+### Gaussian Mixture Convolutional AutoEncoder (GMCAE)
+
+### CNN Classifier
+So far a validation loss of around 0.57 and an accuracy of about 74%, which is still quite far from the winning entries (around 0.40)
+
+### Current issues
+ * Gradient explosion
+   * It's hard to stabilize the gradients. So far, I've been able to control the gradients with small learning rates and/or gradient norm clipping.
+    * I also tried to parametrize directly the inverse variance but that it wasn't helpful.
+    * Also tried fixing the variances to a constant value (determined empirically) but that didn't work either.
+ * Unknown lower bound of loss function
+   * The Gaussians in the mixture are densities, so point estimates of the likelihood can yield negative values if the variances are small enough.
+   * Having variable variances and priors makes it difficult to estimate a lower bound of the loss function, which also makes difficult to know how much the model is underfitting the data.
 
 ## Repository info
 ### Contents
