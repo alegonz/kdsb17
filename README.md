@@ -15,7 +15,7 @@ The competition saw many creative approaches, such as those reported by the winn
 
 What I'm attempting here is a rather more "purist" (for lack of a better word) approach that uses no ensemble models and no external data. The purpose of this is simply to explore the possibility of achieving a decent classification accuracy using a single model and using solely the provided data. The current attempt consists of a combination of two neural networks:
 
-* Gaussian Mixture Convolutional AutoEncoder (GMCAE): A convolutional autoencoder cast as Mixture Density Network ([Bishop, 1994](https://www.microsoft.com/en-us/research/publication/mixture-density-networks/)). This network is used to learn high-level features of lung scans (3D arrays of CT scans in Hounsfield Units), using unsupervised learning and maximum likelihood on a mixture of Gaussians.
+* Gaussian Mixture Convolutional AutoEncoder (GMCAE): A convolutional autoencoder cast as Mixture Density Network ([Bishop, 1994](https://www.microsoft.com/en-us/research/publication/mixture-density-networks/)). This network is used to learn high-level features of patches of lung scans (3D arrays of CT scans in Hounsfield Units), using unsupervised learning and maximum likelihood on a mixture of Gaussians.
 * CNN classifier: Performs binary classification upon the features extracted by the encoding layers of the GMCAE.
 
 ![model_overview](illustrations/model_overview.png "Model overview")
@@ -65,8 +65,7 @@ In this formulation, the priors and normalizing constants of the Gaussians are m
   
 
 ### CNN Classifier
-The purpose of the classifier. The output is a single sigmoid unit, and network is trained to minimize the Log Loss.
-Since the model should be able to handle arrays of variable size, a Spatial Pyramid Pooling layer ([He, 2014](https://arxiv.org/abs/1406.4729)) is used to interface between the convolutional and fully-connected layers.
+The task of this network is to classify the patients upon the features transferred from the GMCAE. The output is a single sigmoid unit, and the network is trained to minimize the Log Loss. Since the model should be able to handle arrays of variable size, a Spatial Pyramid Pooling layer ([He, 2014](https://arxiv.org/abs/1406.4729)) is used to interface between the convolutional and fully-connected layers.
 
 #### Setup
 * Input:
