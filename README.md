@@ -26,8 +26,8 @@ The data consists on a set of CT scan slices of 1,595 patients stored in DICOM f
 
 ### Dataset structure
 * Train: 1397 samples (1 sample = 1 patient)
-  * Training (~80%): 1117 samples
-  * Validaton (~20%): 280 samples
+  * Training (~80%): 1117 samples (291 cancerous)
+  * Validaton (~20%): 280 samples (71 cancerous)
 * Test: 198 samples
 
 ## Model details
@@ -45,11 +45,11 @@ Thus, the conditional probability is instead formulated as a mixture of Gaussian
 
 ![gmd_equations](illustrations/gmd_equations.png "GMD equations")
 
-Where **m** is the number of gaussians in the mixture, and **c** is the number of output dimensions (number of voxels in the reconstruction). The GMCAE is trained to produce outputs that determine the parameters **alpha** (priors), **sigma^2** (variances) and **mu** (means) of the mixture of Gaussians. **alpha**, **sigma** and **mu** are functions of **x** and the network parameters **theta**. Since we are doing reconstruction, **t**=**x** in this case. Specifically the network is trained to minimize the following loss function:
+Where **m** is the number of gaussians in the mixture, and **c** is the number of output dimensions (number of voxels in the reconstruction). The GMCAE is trained to produce outputs that determine the parameters **alpha** (priors), **sigma^2** (variances) and **mu** (means) of the mixture of Gaussians. **alpha**, **sigma** and **mu** are functions of **x** and the network parameters **theta**. Since we are doing reconstruction, **t**=**x** in this case. Specifically, the network is trained to minimize the following loss function:
 
 ![gmd_loss_function](illustrations/gmd_loss_function.png "GMD loss function")
 
-In this formulation, the priors and normalizing constants of the Gaussians are moved inside the exponential function, allowing to represent the loss as a logsumexp to improve numerical stability.
+In this formulation, the priors and normalizing constants of the Gaussians are moved inside the exponential function, allowing to represent the loss as a logsumexp and improve numerical stability.
 
 #### Setup
 * Input:
@@ -57,7 +57,7 @@ In this formulation, the priors and normalizing constants of the Gaussians are m
   * Currently the sub-arrays are set as 32x32x32 arrays corresponding to a cube of 3.2 mm.
   * Data augmentation is performed by random rotations/mirroring of the sub-arrays. Since a cube has 48 symmetries this allows a 48-fold augmentation (ignoring the effects of gravity).
 * Outputs:
-  * **log(alpha)**: A vector of **m** elements that correspond to the log priors of each Gaussian in the mixture. The log priors are with LogSoftmax activiation.
+  * **log(alpha)**: A vector of **m** elements that correspond to the log priors of each Gaussian in the mixture. The log priors are parametrized with a LogSoftmax activiation.
   * **sigma^2**: A vector of **m** elements that correspond to the variances of each Gaussian. The original paper of Mixure Density Networks suggests parametrizing the variances with an exponential activation function. However, an exponential function is prone to numerical instability, and here instead use a ShiftedELU activation. This is just the ELU activation with an added constant of 1, such that the output is always greater than zero. [Another work on Mixture Density Networks also came up with this idea before](https://github.com/axelbrando/Mixture-Density-Networks-for-distribution-and-uncertainty-estimation).
   * **mu**: A 4-D tensor with the means (array reconstructions) of each Gaussian. This is parametrized with a linear activation function.
 * Loss function
