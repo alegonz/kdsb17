@@ -80,9 +80,19 @@ The task of this network is to classify the patients upon the features transferr
 
 ### Gaussian Mixture Convolutional AutoEncoder (GMCAE)
 
+#### Reconstructions
+An example of the reconstruction computed with the GMCAE and a mixture of 4 Gaussians is shown below.
+
+![reconstruction_example_m4_lr1e-4](illustrations/reconstruction_example_m4_lr1e-4.png)
+
+#### Train/Validation loss
+The train and validation loss for varying m (2, 4, or 8 Gaussians) is shown below.
+* The log likehood can take negative values because point estimates of the density can take values greater than 1 if the variances are made small enough.
+
+![train_val_loss_plot](illustrations/train_val_loss_plot.png)
 
 ### CNN Classifier
-So far a validation loss of around 0.57 and an accuracy of about 74% (par with chance level), which is still quite far from the winning entries (around 0.40).
+So far a validation loss of around 0.57 and an accuracy of about 74% (par with chance level), which is still quite far from the winning entries (logloss around 0.40).
 
 ### Current issues
  * Gradient explosion

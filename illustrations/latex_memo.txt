@@ -11,6 +11,5 @@
 \newcommand{\vect}[1]{\boldsymbol{\mathbf{#1}}}
 
 \begin{gathered}
-    J(\vect{\theta};\vect{x},\vect{t}) = \log \sum_{k=1}^{m} \exp \left\{ \log(\alpha_k(\vect{x})) - \dfrac{c}{2}\log(2\pi) - \dfrac{c}{2}\log(\sigma_k(\vect{x})^2) - \dfrac{\|\vect{t} - \vect{\mu}_k(\vect{x})\|^2}{2\sigma_k(\vect{x})^2} \right\}
+    J(\vect{\theta};\vect{x},\vect{t}) = \sum_{n=1}^{N} \log \sum_{k=1}^{m} \exp \left\{ \log(\alpha_k(\vect{x}_n)) - \dfrac{c}{2}\log(2\pi) - \dfrac{c}{2}\log(\sigma_k(\vect{x}_n)^2) - \dfrac{\|\vect{t}_n - \vect{\mu}(\vect{x}_n)\|^2}{2\sigma_k(\vect{x}_n)^2} \right\}
 \end{gathered}
-
