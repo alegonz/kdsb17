@@ -45,7 +45,7 @@ Thus, the conditional probability is instead formulated as a mixture of Gaussian
 
 ![gmd_equations](illustrations/gmd_equations.png "GMD equations")
 
-The GMCAE is trained to produce outputs that determine the parameters **alpha** (priors), **sigma^2** (variances) and **mu** (means) of the mixture of Gaussians. **alpha**, **sigma** and **mu** are functions of **x** and the network parameters **theta**. Since we are doing reconstruction, **t**=**x** in this case. Specifically the network is trained to minimize the following loss function:
+Where **m** is the number of gaussians in the mixture, and **c** is the number of output dimensions (number of voxels in the reconstruction). The GMCAE is trained to produce outputs that determine the parameters **alpha** (priors), **sigma^2** (variances) and **mu** (means) of the mixture of Gaussians. **alpha**, **sigma** and **mu** are functions of **x** and the network parameters **theta**. Since we are doing reconstruction, **t**=**x** in this case. Specifically the network is trained to minimize the following loss function:
 
 ![gmd_loss_function](illustrations/gmd_loss_function.png "GMD loss function")
 

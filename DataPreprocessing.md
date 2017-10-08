@@ -23,3 +23,20 @@
 | Columns                 | Number of columns in slice                                                  | 512           |
 | BitsStored              | Bit resolution of pixels in slice                                           | 12            |
 | SamplesPerPixel         | Number of channels per pixel                                                | 1             |
+
+
+
+
+| **PixelData**                 | RescaleSlope            | CompressionCode
+| **BitsStored**                | Rows                    | ImageDimensions
+| BurnedInAnnotation        | Columns                 | ImageFormat
+| ImageOrientationPatient   | SamplesPerPixel         | ImageLocation
+| ImagePositionPatient      | SeriesDescription       | NumberOfFrames
+| Modality                  | SeriesInstanceUID       | PixelAspectRatio
+| ~~PatientBirthDate~~          | SeriesNumber            | LossyImageCompression
+| ~~PatientName~~               | SliceLocation           | Laterality
+| PhotometricInterpretation | PatientOrientation      | SourceImageSequence
+| PixelPaddingValue         | PlanarConfiguration     | TemporalPositionIndex
+| PixelRepresentation       | RescaleType             | VolumetricProperties
+| PixelSpacing              | LargestImagePixelValue  | ~~Allergies~~
+| RescaleIntercept          | SmallestImagePixelValue | ~~PregnancyStatus~~
