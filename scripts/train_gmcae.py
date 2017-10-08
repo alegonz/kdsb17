@@ -18,7 +18,7 @@ def main():
 
     # --------- Model parameters
     # Network parameters
-    n_gaussians = 4
+    n_gaussians = 8
     input_shape = (32, 32, 32)
     nb_filters_per_layer = (64, 128, 256)
     kernel_size = (3, 3, 3)
@@ -26,7 +26,7 @@ def main():
     batch_normalization = False
     optimizer = Adam(lr=0.0001)
     es_patience = 10
-    histogram_freq = 1
+    histogram_freq = 0
 
     # Training parameters
     batch_size = 32

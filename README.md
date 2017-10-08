@@ -1,4 +1,4 @@
-# Gaussian Mixture Convolutional AutoEncoder for feature learning on 3D CT lung scan data
+# Gaussian Mixture Convolutional AutoEncoder for feature learning on 3D CT lung scan data (Keras/Tensorflow implementation)
 
 ##### Notes
 * **This is still work in progress.**
@@ -13,37 +13,69 @@ The competition saw many creative approaches, such as those reported by the winn
 2. leverage external data, in particular the [LUNA dataset](https://luna16.grand-challenge.org/);
 3. make extensive use of ensemble of models.
 
-What I'm attempting here is a rather more "purist" (for lack of a better word) approach that uses no ensemble models and no external data. The purpose of this is simply to explore the possibility of achieving a decent classification accuracy using a single model and using solely the provided data. This model consists of a combination of two neural networks:
+What I'm attempting here is a rather more "purist" (for lack of a better word) approach that uses no ensemble models and no external data. The purpose of this is simply to explore the possibility of achieving a decent classification accuracy using a single model and using solely the provided data. The current attempt consists of a combination of two neural networks:
 
-* Gaussian Mixture Convolutional AutoEncoder (GMCAE): A convolutional autoencoder cast as Mixture Density Network ([Bishop, 1994](https://www.microsoft.com/en-us/research/publication/mixture-density-networks/)). This network learns high-level features of lung scans (3D arrays of CT scans in Hounsfield Units), using maximum likelihood on a mixture of Gaussians.
+* Gaussian Mixture Convolutional AutoEncoder (GMCAE): A convolutional autoencoder cast as Mixture Density Network ([Bishop, 1994](https://www.microsoft.com/en-us/research/publication/mixture-density-networks/)). This network is used to learn high-level features of lung scans (3D arrays of CT scans in Hounsfield Units), using unsupervised learning and maximum likelihood on a mixture of Gaussians.
 * CNN classifier: Performs binary classification upon the features extracted by the encoding layers of the GMCAE.
 
 ![model_overview](illustrations/model_overview.png "Model overview")
 
-## Data details
-The details of preprocessing are explained [here]().
+## Data details (Data from Stage 1 of the competition)
+
+The data consists on a set of CT scan slices of 1,595 patients stored in DICOM format. For each patient a 3D array is constructed by merging the slices, applying appropriate preprocessing, and extracting the lung area. Each patient's 3D array constitutes a sample and it has associated a binary label indicating whether it was diagnosed with cancer or not within a year. The details of preprocessing are explained [here]().
+
+### Dataset structure
+* Train: 1397 samples (1 sample = 1 patient)
+  * Training (~80%): 1117 samples
+  * Validaton (~20%): 280 samples
+* Test: 198 samples
 
 ## Model details
-The current architecture of both networks is shown in the figure below:
+The current architecture of both networks is summarized in the figure below:
 ![networks_details](illustrations/networks_details.png "Networks details")
 
 ### Gaussian Mixture Convolutional AutoEncoder (GMCAE)
-The purpose of this network is to learn features from the 3D CT lung arrays that could be transferred to the second network for classification.
+The purpose of this network is to learn features from the 3D CT lung arrays that could be transferred to the second network for classification. This is done through unsupervised learning using an autoencoder with a reconstruction task.
 
+#### Why Gaussian Mixture?
+
+As a reconstruction objective for the autoencoder, one could attempt to minimize a MSE objective, but this would fail because the CT scan voxels have a multimodal distribution (as shown in [here]()) and a MSE objective would tend to predict the average of the distribution and thus likely yield meaningless predictions. This is because a MSE objective is equivalent to maximizing the log-likelihood assuming a (uni-modal) Gaussian distribution for the conditional probability of the output given the data.
+
+Thus, the conditional probability is instead formulated as a mixture of Gaussians as below:
+
+![gmd_equations](illustrations/gmd_equations.png "GMD equations")
+
+The GMCAE is trained to produce outputs that determine the parameters **alpha** (priors), **sigma^2** (variances) and **mu** (means) of the mixture of Gaussians. **alpha**, **sigma** and **mu** are functions of **x** and the network parameters **theta**. Since we are doing reconstruction, **t**=**x** in this case. Specifically the network is trained to minimize the following loss function:
+
+![gmd_loss_function](illustrations/gmd_loss_function.png "GMD loss function")
+
+In this formulation, the priors and normalizing constants of the Gaussians are moved inside the exponential function, allowing to represent the loss as a logsumexp to improve numerical stability.
+
+#### Setup
 * Input:
-  * A 3D sub-array of size 32x32x32, corresponding to a cube patch of 3.2mm which should be enough to contain lung nodules.
+  * A 3D sub-array corresponding to a cube patch of fixed size, big enough to contain a lung nodule.
+  * Currently the sub-arrays are set as 32x32x32 arrays corresponding to a cube of 3.2 mm.
+  * Data augmentation is performed by random rotations/mirroring of the sub-arrays. Since a cube has 48 symmetries this allows a 48-fold augmentation (ignoring the effects of gravity).
 * Outputs:
   * **log(alpha)**: A vector of **m** elements that correspond to the log priors of each Gaussian in the mixture. The log priors are with LogSoftmax activiation.
   * **sigma^2**: A vector of **m** elements that correspond to the variances of each Gaussian. The original paper of Mixure Density Networks suggests parametrizing the variances with an exponential activation function. However, an exponential function is prone to numerical instability, and here instead use a ShiftedELU activation. This is just the ELU activation with an added constant of 1, such that the output is always greater than zero. [Another work on Mixture Density Networks also came up with this idea before](https://github.com/axelbrando/Mixture-Density-Networks-for-distribution-and-uncertainty-estimation).
   * **mu**: A 4-D tensor with the means (array reconstructions) of each Gaussian. This is parametrized with a linear activation function.
 * Loss function
-  * As a reconstruction objective for the CAE, one could attempt to use a linear activation at the output layer and minimize a MSE objective, but this would fail because the array voxels have a multimodal distribution and a linear/MSE objective, which will tend to predict the average of the distribution and likely yield meaningless predictions.
-  * Thus, instead The GMCAE is designed to produce outputs that determine the parameters **alpha** (priors), **sigma^2** (variances) and **mu** (means) of the mixture of Gaussians. **alpha**, **sigma** and **mu** are functions of **x** and the network parameters **theta**.
-(Since we are doing reconstruction, **t**=**x** in this case.)
+  * Log likelihood given by the above equation.
+  
 
 ### CNN Classifier
 The purpose of the classifier. The output is a single sigmoid unit, and network is trained to minimize the Log Loss.
 Since the model should be able to handle arrays of variable size, a Spatial Pyramid Pooling layer ([He, 2014](https://arxiv.org/abs/1406.4729)) is used to interface between the convolutional and fully-connected layers.
+
+#### Setup
+* Input:
+  * Full 3D array of lung area.
+  * Data augmentation is performed by random rotations/mirroring of the sub-arrays. Since a cube has 48 symmetries this allows a 48-fold augmentation (ignoring the effects of gravity).
+* Output:
+  * Probability of being diagnosed with cancer within a year.
+* Loss function
+  * Log loss (aka binary crossentropy).
 
 ## Current results
 

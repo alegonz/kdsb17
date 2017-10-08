@@ -1,16 +1,16 @@
-# GMD equations
+% GMD equations
 \newcommand{\vect}[1]{\boldsymbol{\mathbf{#1}}}
-\begin{equation}
-    \begin{gathered}
-        p(\vect{t}|\vect{x}) = \sum_{k=1}^{m} \alpha_i(\vect{x}) \phi_k(\vect{t}|\vect{x}) \\
-        \phi_k(\vect{t}|\vect{x}) = \dfrac{1}{(2\pi\sigma_k(\vect{x})^2)^{c/2}} \exp\left( -\dfrac{\|\vect{t} - \vect{\mu}_k(\vect{x})\|^2}{2\sigma_k(\vect{x})^2} \right)
-    \end{gathered}
-\end{equation}
 
-# GMD objective
+\begin{gathered}
+    p(\vect{t}|\vect{x}) = \sum_{k=1}^{m} \alpha_i(\vect{x}) \phi_k(\vect{t}|\vect{x}) \\
+    \phi_k(\vect{t}|\vect{x}) = \dfrac{1}{(2\pi\sigma_k(\vect{x})^2)^{c/2}} \exp\left( -\dfrac{\|\vect{t} - \vect{\mu}_k(\vect{x})\|^2}{2\sigma_k(\vect{x})^2} \right)
+\end{gathered}
+
+
+% GMD loss function
 \newcommand{\vect}[1]{\boldsymbol{\mathbf{#1}}}
-\begin{equation}
-    \begin{gathered}
-        J = \log \sum_{k=1}^{m} \exp \left\{ \log(\alpha_k(\vect{x})) - \dfrac{c}{2}\log(2\pi) - \dfrac{c}{2}\log(\sigma_k(\vect{x})^2) - \dfrac{\|\vect{t} - \vect{\mu}_k(\vect{x})\|^2}{2\sigma_k(\vect{x})^2} \right\}
-    \end{gathered}
-\end{equation}
+
+\begin{gathered}
+    J(\vect{\theta};\vect{x},\vect{t}) = \log \sum_{k=1}^{m} \exp \left\{ \log(\alpha_k(\vect{x})) - \dfrac{c}{2}\log(2\pi) - \dfrac{c}{2}\log(\sigma_k(\vect{x})^2) - \dfrac{\|\vect{t} - \vect{\mu}_k(\vect{x})\|^2}{2\sigma_k(\vect{x})^2} \right\}
+\end{gathered}
+
