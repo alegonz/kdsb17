@@ -26,17 +26,17 @@
 
 
 
-
-| **PixelData**                 | RescaleSlope            | CompressionCode
-| **BitsStored**                | Rows                    | ImageDimensions
-| BurnedInAnnotation        | Columns                 | ImageFormat
-| ImageOrientationPatient   | SamplesPerPixel         | ImageLocation
-| ImagePositionPatient      | SeriesDescription       | NumberOfFrames
-| Modality                  | SeriesInstanceUID       | PixelAspectRatio
-| ~~PatientBirthDate~~          | SeriesNumber            | LossyImageCompression
-| ~~PatientName~~               | SliceLocation           | Laterality
-| PhotometricInterpretation | PatientOrientation      | SourceImageSequence
-| PixelPaddingValue         | PlanarConfiguration     | TemporalPositionIndex
-| PixelRepresentation       | RescaleType             | VolumetricProperties
-| PixelSpacing              | LargestImagePixelValue  | ~~Allergies~~
-| RescaleIntercept          | SmallestImagePixelValue | ~~PregnancyStatus~~
+|-------------------------------|-------------------------|-----------------------|
+| **PixelData**                 | **RescaleSlope**        | CompressionCode       |
+| **BitsStored**                | **Rows**                | ImageDimensions       |
+| BurnedInAnnotation            | **Columns**             | ImageFormat           |
+| **ImageOrientationPatient**   | **SamplesPerPixel**     | ImageLocation         |
+| **ImagePositionPatient**      | SeriesDescription       | NumberOfFrames        |
+| Modality                      | SeriesInstanceUID       | PixelAspectRatio      |
+| ~~PatientBirthDate~~          | SeriesNumber            | LossyImageCompression |
+| ~~PatientName~~               | SliceLocation           | Laterality            |
+| **PhotometricInterpretation** | PatientOrientation      | SourceImageSequence   |
+| PixelPaddingValue             | PlanarConfiguration     | TemporalPositionIndex |
+| **PixelRepresentation**       | RescaleType             | VolumetricProperties  |
+| **PixelSpacing**              | LargestImagePixelValue  | ~~Allergies~~         |
+| **RescaleIntercept**          | SmallestImagePixelValue | ~~PregnancyStatus~~   |
