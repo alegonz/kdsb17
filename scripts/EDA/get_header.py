@@ -4,8 +4,8 @@ import datetime
 import dicom
 import pandas as pd
 
-BASE_PATH = '/data/data/stage1'
-OUT_PATH = '/data/results'
+BASE_PATH = '/path/to/data/folder'
+OUT_PATH = '/path/to/results/folder'
 
 suffixes = {
     'ImagePositionPatient': ['x', 'y', 'z'],
