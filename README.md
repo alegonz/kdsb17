@@ -1,8 +1,11 @@
-# Gaussian Mixture Convolutional AutoEncoder for feature learning on 3D CT lung scan data (Keras/Tensorflow implementation)
+# Gaussian Mixture Convolutional AutoEncoder for feature learning on 3D CT lung scan data (Keras/TensorFlow implementation)
 
-##### Notes
+## Notes
 * **This is still work in progress.**
-* For the source code and requirements please refer to [Repository info]().
+* For the source code and requirements please refer to [Repository info](#repository-info).
+* The Keras/TensorFlow implementation of the Gaussian Mixture Negative Log-Likelihood loss is in [losses.py](kdsb17/losses.py). It is created by calling the ```build_gmd_log_likelihood(c, m)``` function.
+  * For details refer to [this section](#using-the-code-for-gaussian-mixture-density-in-your-project) and the source code.
+* Custom Keras objects that define the ```ShiftedELU```, ```log_softmax``` to parametrize  the log-priors and variances are implemented [here](kdsb17/advanced_activations.py) and [here](kdsb17/activations.py).
 
 ## Description
 This is an attempt at the classification task featured in the [Kaggle Data Science Bowl 2017](https://www.kaggle.com/c/data-science-bowl-2017). The task consists on predicting from CT lung scans whether a patient will develop cancer or not within a year. This is a particularly challenging problem given the very high dimensionality of data and the very limited number of samples.
@@ -22,7 +25,7 @@ What I'm attempting here is a rather more "purist" (for lack of a better word) a
 
 ## Data details (Data from Stage 1 of the competition)
 
-The data consists on a set of CT scan slices of 1,595 patients stored in DICOM format. For each patient a 3D array is constructed by merging the slices, applying appropriate preprocessing, and extracting the lung area. Each patient's 3D array constitutes a sample and it has associated a binary label indicating whether it was diagnosed with cancer or not within a year. The details of preprocessing are explained [here]().
+The data consists on a set of CT scan slices of 1,595 patients stored in DICOM format. For each patient a 3D array is constructed by merging the slices, applying appropriate preprocessing, and extracting the lung area. Each patient's 3D array constitutes a sample and it has associated a binary label indicating whether it was diagnosed with cancer or not within a year. The details of preprocessing are explained [here](DataPreprocessing.md).
 
 ### Dataset structure
 * Train: 1397 samples (1 sample = 1 patient)
@@ -39,7 +42,7 @@ The purpose of this network is to learn features from the 3D CT lung arrays that
 
 #### Why Gaussian Mixture?
 
-As a reconstruction objective for the autoencoder, one could attempt to minimize a MSE objective, but this would fail because the CT scan voxels have a multimodal distribution (as shown in [here]()) and a MSE objective would tend to predict the average of the distribution and thus likely yield meaningless predictions. This is because a MSE objective is equivalent to maximizing the log-likelihood assuming a (uni-modal) Gaussian distribution for the conditional probability of the output given the data.
+As a reconstruction objective for the autoencoder, one could attempt to minimize a MSE objective, but this would fail because the CT scan voxels have a multimodal distribution (as shown in [here](illustrations/slice_example.png)) and a MSE objective would tend to predict the average of the distribution and thus likely yield meaningless predictions. This is because a MSE objective is equivalent to maximizing the log-likelihood assuming a (uni-modal) Gaussian distribution for the conditional probability of the output given the data.
 
 Thus, the conditional probability is instead formulated as a mixture of Gaussians as below:
 
@@ -81,12 +84,12 @@ The task of this network is to classify the patients upon the features transferr
 ### Gaussian Mixture Convolutional AutoEncoder (GMCAE)
 
 #### Reconstructions
-An example of the reconstruction computed with the GMCAE and a mixture of 4 Gaussians is shown below.
+An example of the reconstruction computed with the GMCAE using a mixture of 4 Gaussians is shown below. The 24 slice patches on the left are the original, and those on the right are the reconstructions produced by the model.
 
 ![reconstruction_example_m4_lr1e-4](illustrations/reconstruction_example_m4_lr1e-4.png)
 
 #### Train/Validation loss
-The train and validation loss for varying m (2, 4, or 8 Gaussians) is shown below.
+The train and validation loss for **m** = 2, 4 is shown below.
 * The log likehood can take negative values because point estimates of the density can take values greater than 1 if the variances are made small enough.
 
 ![train_val_loss_plot](illustrations/train_val_loss_plot.png)
@@ -105,10 +108,26 @@ So far a validation loss of around 0.57 and an accuracy of about 74% (par with c
 
 ## Repository info
 ### Contents
-* **kdsb17**: \
+* **kdsb17**:
+
   Contains the custom modules for data pre-processing, and building and training the models.
-* **scripts**: \
+
+* **scripts**:
+  
   Contains the scripts to preprocess the data, train the models and predict.
+  
+### Using the code for Gaussian Mixture Density in your project
+* Feel free to use these functions in your project if you find them useful. Just let me know if you found it useful :)
+
+The Keras/TensorFlow implementation of the Gaussian Mixture Negative Log-Likelihood loss is in [losses.py](kdsb17/losses.py). It is created by calling the ```build_gmd_log_likelihood(c, m)``` function.
+  * ```build_gmd_log_likelihood(c, m)``` takes two parameters: the number of output dimensions **c** and the number of Gaussians in the mixture **m**.
+  * To use this loss function the output shape must be ```(samples, m*(c + 2))```, with the second dimension encoding the mixture parameters in the following order:
+    * m log-priors (outputs of a log-softmax activation layer)
+    * m variances (outputs of a ShiftedELU activation layer)
+    * m*c means (outputs of a linear activation layer)
+  * The target data must be of shape ```(samples, c)```.
+* Custom Keras objects that define the ```ShiftedELU```, ```log_softmax``` to parametrize  the log-priors and variances are implemented [here](kdsb17/advanced_activations.py) and [here](kdsb17/activations.py).
+* **Important**: Due to the inverse variance term in the loss function, it is not uncommon to encounter exploding gradients and NaNs when training your model. You might need to use small learning rates and/or gradient norm clipping to stabilize the gradients.
 
 ### Requirements
 * Python 3
