@@ -2,7 +2,7 @@
 
 ##### Notes
 * **This is still work in progress.**
-* For the source code and requirements please refer to [Repository info]().
+* For the source code and requirements please refer to [Repository info](#repository-info).
 
 ## Description
 This is an attempt at the classification task featured in the [Kaggle Data Science Bowl 2017](https://www.kaggle.com/c/data-science-bowl-2017). The task consists on predicting from CT lung scans whether a patient will develop cancer or not within a year. This is a particularly challenging problem given the very high dimensionality of data and the very limited number of samples.
@@ -22,7 +22,7 @@ What I'm attempting here is a rather more "purist" (for lack of a better word) a
 
 ## Data details (Data from Stage 1 of the competition)
 
-The data consists on a set of CT scan slices of 1,595 patients stored in DICOM format. For each patient a 3D array is constructed by merging the slices, applying appropriate preprocessing, and extracting the lung area. Each patient's 3D array constitutes a sample and it has associated a binary label indicating whether it was diagnosed with cancer or not within a year. The details of preprocessing are explained [here]().
+The data consists on a set of CT scan slices of 1,595 patients stored in DICOM format. For each patient a 3D array is constructed by merging the slices, applying appropriate preprocessing, and extracting the lung area. Each patient's 3D array constitutes a sample and it has associated a binary label indicating whether it was diagnosed with cancer or not within a year. The details of preprocessing are explained [here](DataPreprocessing.md).
 
 ### Dataset structure
 * Train: 1397 samples (1 sample = 1 patient)
@@ -39,7 +39,7 @@ The purpose of this network is to learn features from the 3D CT lung arrays that
 
 #### Why Gaussian Mixture?
 
-As a reconstruction objective for the autoencoder, one could attempt to minimize a MSE objective, but this would fail because the CT scan voxels have a multimodal distribution (as shown in [here]()) and a MSE objective would tend to predict the average of the distribution and thus likely yield meaningless predictions. This is because a MSE objective is equivalent to maximizing the log-likelihood assuming a (uni-modal) Gaussian distribution for the conditional probability of the output given the data.
+As a reconstruction objective for the autoencoder, one could attempt to minimize a MSE objective, but this would fail because the CT scan voxels have a multimodal distribution (as shown in [here](illustrations/slice_example.png)) and a MSE objective would tend to predict the average of the distribution and thus likely yield meaningless predictions. This is because a MSE objective is equivalent to maximizing the log-likelihood assuming a (uni-modal) Gaussian distribution for the conditional probability of the output given the data.
 
 Thus, the conditional probability is instead formulated as a mixture of Gaussians as below:
 
@@ -105,9 +105,12 @@ So far a validation loss of around 0.57 and an accuracy of about 74% (par with c
 
 ## Repository info
 ### Contents
-* **kdsb17**: \
+* **kdsb17**:
+
   Contains the custom modules for data pre-processing, and building and training the models.
-* **scripts**: \
+
+* **scripts**:
+  
   Contains the scripts to preprocess the data, train the models and predict.
 
 ### Requirements
