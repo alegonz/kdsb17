@@ -15,7 +15,23 @@ from kdsb17.utils.file import makedir
 
 
 class NakedModel(object):
-    # TODO: Write me a documentation
+    """Naked, empty model class. This class implements the common facilities to compile and train a model.
+    GaussianMixtureCAE and LungNet inherit from and build upon it by defining the _build_layers method.
+
+    Args:
+        optimizer (str): Name of Keras optimizer. An optimizer object can also be passed directly.
+        es_patience (int): Number of patience epochs for EarlyStopping.
+        model_path (str): Path to the location where the model files will be saved.
+        weights_name_format(str): Format of weight checkpoint files (refer to the Keras documentation for details).
+        histogram_freq (int): Frequency (in epochs) for saving weights, activations and gradients
+            histograms in Tensorboard.If 0, no histograms will be computed.
+
+    Methods:
+        build_model: Builds and compiles the model.
+        summary: Print summary of model to stdout
+        load_weights_from_file: Load the weights of the model from a file.
+        fit_generator: Train the model on data yielded batch-by-batch by a generator.
+    """
 
     def __init__(self,
                  optimizer='adam', es_patience=10,
@@ -58,10 +74,10 @@ class NakedModel(object):
         pass
 
     def _compile_model(self):
-        pass
+        self._model.compile(optimizer=self.optimizer, loss=self._loss)
 
     def build_model(self, freeze=None):
-        """Build the model.
+        """Builds and compiles the model.
 
         Args:
             freeze (list): Name of layers to freeze in training.
@@ -129,7 +145,14 @@ class NakedModel(object):
 
 
 class Encoder(object):
-    # TODO: Write me a documentation
+    """Auxiliary class to define encoding layers common to GaussianMixtureCAE and LungNet.
+
+    Args:
+        nb_filters_per_layer (tuple): Number of filters per layer.
+        kernel_size (tuple): Convolution kernel size.
+        padding (str): Padding type ('same' or 'valid').
+        batch_normalization (bool): Whether to apply batch normalization to convolutional layers (True) or not (False).
+    """
 
     def __init__(self, nb_filters_per_layer, kernel_size, padding, batch_normalization):
         self.nb_filters_per_layer = nb_filters_per_layer
@@ -167,6 +190,11 @@ class GaussianMixtureCAE(Encoder, NakedModel):
     Performs feature learning on CT scan patches. The network structure is as follows:
         Input -> Encoder -> Decoder -> Output
         The output parametrizes a Gaussian Mixture Density.
+
+    Args:
+        n_gaussians (int): Number of Gaussians in the mixture.
+        input_shape (tuple): Shape of input 3D array.
+        Other arguments passed to NakedModel and Encoder instances.
     """
 
     def __init__(self,
@@ -185,7 +213,9 @@ class GaussianMixtureCAE(Encoder, NakedModel):
         self.n_dense_log_prior = 128
         self.n_dense_sigma_sq = 128
 
-        self._loss = build_gmd_log_likelihood(input_shape, n_gaussians)
+        z, y, x = input_shape
+        c = z * y * x  # Number of output dimensions
+        self._loss = build_gmd_log_likelihood(c, n_gaussians)
 
     def _custom_conv3dtranspose(self, layer, nb_filters, strides, name):
 
@@ -250,9 +280,6 @@ class GaussianMixtureCAE(Encoder, NakedModel):
         # Output layer parametrizes a Gaussian Mixture Density.
         self._output_layer = self._build_gmd_layers(encoded, decoded)
 
-    def _compile_model(self):
-        self._model.compile(optimizer=self.optimizer, loss=self._loss)
-
     def predict(self, array):
         """Predict from model.
 
@@ -297,6 +324,13 @@ class LungNet(Encoder, NakedModel):
 
     The encoder weights are transferred from the GaussianMixtureCAE, the classifier is a stack of dense layers,
     and the output parametrizes a Bernoulli distribution on the class labels.
+
+    Args:
+        spp_nb_bins_per_level (tuple): Number of bins per level in Spatial Pyramid Pooling.
+        n_dense (tuple): Number of hidden units per fully-connected layer.
+            The length of the tuple determines the number of layers.
+        dropout_rate (float): Dropout rate of fully-connected layers.
+        Other arguments passed to NakedModel and Encoder.
     """
     def __init__(self,
                  nb_filters_per_layer=(64, 128, 256), kernel_size=(3, 3, 3), padding='same', batch_normalization=False,

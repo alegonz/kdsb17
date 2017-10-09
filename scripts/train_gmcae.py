@@ -79,5 +79,6 @@ def main():
     gmcae.fit_generator(train_generator=train_gen, steps_per_epoch=steps_per_epoch, epochs=epochs,
                         validation_generator=val_data, validation_steps=validation_steps)
 
+
 if __name__ == '__main__':
     main()
