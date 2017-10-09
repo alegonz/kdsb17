@@ -4,7 +4,7 @@
 * **This is still work in progress.**
 * For the source code and requirements please refer to [Repository info](#repository-info).
 * The Keras/TensorFlow implementation of the Gaussian Mixture Negative Log-Likelihood loss is in [losses.py](kdsb17/losses.py). It is created by calling the ```build_gmd_log_likelihood(c, m)``` function.
-  * For details refer to [] and the source code.
+  * For details refer to [this section](#using-the-code-for-gaussian-mixture-density-in-your-project) and the source code.
 * Custom Keras objects that define the ```ShiftedELU```, ```log_softmax``` to parametrize  the log-priors and variances are implemented [here](kdsb17/advanced_activations.py) and [here](kdsb17/activations.py).
 
 ## Description
@@ -84,7 +84,7 @@ The task of this network is to classify the patients upon the features transferr
 ### Gaussian Mixture Convolutional AutoEncoder (GMCAE)
 
 #### Reconstructions
-An example of the reconstruction computed with the GMCAE and a mixture of 4 Gaussians is shown below.
+An example of the reconstruction computed with the GMCAE using a mixture of 4 Gaussians is shown below. The 24 slice patches on the left are the original, and those on the right are the reconstructions produced by the model.
 
 ![reconstruction_example_m4_lr1e-4](illustrations/reconstruction_example_m4_lr1e-4.png)
 
